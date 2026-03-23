@@ -1,0 +1,1768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>B-Roll Planner · Pega Events</title>
+<style>
+/* ── RESET & CSS VARIABLES ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0f1117;
+  --surf:     #1a1d27;
+  --surf2:    #252930;
+  --surf3:    #2d3240;
+  --accent:   #0047BB;
+  --accent-h: #0057e0;
+  --success:  #22c55e;
+  --warn:     #f59e0b;
+  --danger:   #ef4444;
+  --text:     #f1f5f9;
+  --muted:    #94a3b8;
+  --border:   #2d3748;
+  --radius:   12px;
+  --radius-sm:8px;
+  --max-w:    600px;
+  --hdr:      56px;
+}
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ── */
+#app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--hdr);
+  background: rgba(15,17,23,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+.hdr-inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  gap: 4px;
+}
+.hdr-title {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hdr-title .blue { color: var(--accent); }
+.hdr-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 18px;
+  min-width: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color .15s, background .15s;
+  flex-shrink: 0;
+}
+.hdr-btn:hover { color: var(--text); background: var(--surf2); }
+
+/* ── PAGE WRAP ── */
+.page-wrap {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 24px 16px calc(40px + env(safe-area-inset-bottom));
+}
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background .15s, opacity .15s, transform .1s;
+  min-height: 44px;
+  text-decoration: none;
+  color: inherit;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-h); }
+.btn-ghost { background: var(--surf2); color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--surf3); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { padding: 8px 14px; font-size: 13px; min-height: 36px; }
+.btn-full { width: 100%; }
+.btn-large { width: 100%; font-size: 16px; padding: 16px; }
+.form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ── FORMS ── */
+.form-group { margin-bottom: 22px; }
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+}
+input[type=text],
+input[type=password],
+textarea {
+  width: 100%;
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  transition: border-color .15s;
+  -webkit-appearance: none;
+}
+input[type=text]:focus,
+input[type=password]:focus,
+textarea:focus { outline: none; border-color: var(--accent); }
+.form-hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+/* Sliders */
+input[type=range] {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surf3);
+  outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+input[type=range]::-moz-range-thumb {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 3px solid var(--bg);
+}
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.skill-tip {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+  min-height: 20px;
+}
+
+/* Contenteditable styled as input */
+.ce-input {
+  display: block;
+  width: 100%;
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  min-height: 44px;
+  word-break: break-word;
+  transition: border-color .15s;
+}
+.ce-input:focus { outline: none; border-color: var(--accent); }
+.ce-input:empty::before { content: attr(data-placeholder); color: var(--muted); }
+
+/* ── HOME SCREEN ── */
+.empty-state {
+  text-align: center;
+  padding: 60px 16px 40px;
+}
+.empty-icon { font-size: 64px; margin-bottom: 16px; }
+.empty-state h2 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+.empty-state p { color: var(--muted); font-size: 15px; line-height: 1.5; }
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 12px;
+}
+.project-list { margin-bottom: 8px; }
+.project-card {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.project-card-main {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  cursor: pointer;
+  gap: 12px;
+  transition: background .15s;
+}
+.project-card-main:hover { background: var(--surf2); }
+.project-card-info { flex: 1; min-width: 0; }
+.project-name { font-weight: 700; font-size: 16px; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-meta { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.mini-progress-track { height: 4px; background: var(--surf3); border-radius: 2px; overflow: hidden; }
+.mini-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s; }
+.project-pct { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.project-arrow { color: var(--muted); font-size: 20px; flex-shrink: 0; }
+.project-card-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+.proj-action-btn {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 15px;
+  padding: 10px 16px;
+  flex: 1;
+  transition: color .15s, background .15s;
+  font-family: inherit;
+}
+.proj-action-btn:last-child { border-right: none; }
+.proj-action-btn:hover { color: var(--text); background: var(--surf2); }
+.proj-action-btn.del:hover { color: var(--danger); }
+.delete-confirm {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* ── SETTINGS SCREEN ── */
+.screen-title { font-size: 24px; font-weight: 800; margin-bottom: 24px; letter-spacing: -0.03em; }
+.api-key-link {
+  display: block;
+  text-align: center;
+  margin-top: 16px;
+  color: var(--accent);
+  font-size: 14px;
+  text-decoration: none;
+}
+.api-key-link:hover { text-decoration: underline; }
+
+/* ── NEW PROJECT SCREEN ── */
+.lens-badge-wrap { margin-bottom: 20px; min-height: 28px; }
+.lens-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0,71,187,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(0,71,187,0.3);
+  border-radius: 20px;
+  padding: 5px 12px;
+}
+
+/* ── LOADING SCREEN ── */
+.loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: 40px 20px;
+  gap: 0;
+}
+.loading-spinner {
+  width: 48px; height: 48px;
+  border: 4px solid var(--surf3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin-bottom: 24px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-msg {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.loading-sub { font-size: 13px; color: var(--muted); }
+
+/* ── CHECKLIST SCREEN ── */
+.checklist-hdr { margin-bottom: 16px; }
+.proj-title-edit {
+  font-size: 22px;
+  font-weight: 800;
+  display: block;
+  letter-spacing: -0.03em;
+  border-bottom: 1px dashed transparent;
+  padding-bottom: 2px;
+  transition: border-color .15s;
+  cursor: text;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.proj-title-edit:focus { outline: none; border-bottom-color: var(--accent); }
+.progress-label { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.progress-track { height: 6px; background: var(--surf3); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s ease; }
+
+.tip-banner {
+  background: rgba(0,71,187,0.1);
+  border: 1px solid rgba(0,71,187,0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* Shot cards */
+.shot-list { margin-bottom: 16px; }
+.shot-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surf);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  min-height: 58px;
+  transition: border-color .2s, background .2s, transform .1s;
+}
+.shot-card:active { transform: scale(0.99); }
+.shot-card.done {
+  border-color: var(--success);
+  background: rgba(34,197,94,0.06);
+}
+.check-circle {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  color: var(--success);
+  flex-shrink: 0;
+  transition: border-color .2s, background .2s;
+}
+.shot-card.done .check-circle { background: var(--success); border-color: var(--success); color: #fff; }
+.shot-info { flex: 1; min-width: 0; }
+.shot-type-badge {
+  font-size: 11px; font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+}
+.shot-title { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.shot-card.done .shot-title { opacity: 0.5; text-decoration: line-through; }
+.fps-badge-sm, .mimo-badge-sm {
+  display: inline-block;
+  font-size: 9px;
+  background: var(--surf3);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.shot-expand {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 18px;
+  min-width: 36px; min-height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.shot-expand:hover { color: var(--text); background: var(--surf2); }
+
+/* Custom shot form */
+.custom-form-wrap { margin-bottom: 16px; }
+.add-custom-btn { width: 100%; border-style: dashed !important; }
+.custom-form {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.custom-form-title { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+
+/* New direction panel */
+.new-dir-wrap { margin-bottom: 16px; }
+.new-dir-toggle { width: 100%; color: var(--muted); font-size: 14px; }
+.new-dir-form {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.new-dir-form h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.new-dir-desc { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+
+/* Checklist footer */
+.checklist-footer {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0);
+  display: flex; align-items: flex-end;
+  z-index: 100;
+  transition: background .3s;
+}
+.modal-overlay.open { background: rgba(0,0,0,0.75); }
+.modal-sheet {
+  background: var(--surf);
+  border-radius: 20px 20px 0 0;
+  padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform .35s cubic-bezier(0.32,0.72,0,1);
+}
+.modal-overlay.open .modal-sheet { transform: translateY(0); }
+@media (min-width: 640px) {
+  .modal-overlay { align-items: center; }
+  .modal-sheet {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    border-radius: var(--radius);
+    max-height: 85vh;
+    padding-bottom: 24px;
+  }
+}
+.modal-drag { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+.shot-what { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 8px; }
+.modal-title { font-size: 20px; font-weight: 800; margin-bottom: 10px; line-height: 1.2; letter-spacing: -0.02em; }
+.modal-badges { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.badge-type {
+  font-size: 13px; font-weight: 700;
+  background: rgba(0,71,187,0.15); color: var(--accent);
+  border-radius: 20px; padding: 4px 12px;
+}
+.badge-fps {
+  font-size: 12px; font-weight: 700;
+  background: rgba(245,158,11,0.15); color: var(--warn);
+  border-radius: 4px; padding: 3px 8px;
+}
+.badge-mimo {
+  font-size: 12px; font-weight: 700;
+  background: rgba(245,158,11,0.15); color: var(--warn);
+  border-radius: 4px; padding: 3px 8px;
+}
+.modal-desc { font-size: 15px; line-height: 1.6; margin-bottom: 14px; }
+.tip-box {
+  background: rgba(0,71,187,0.1);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 14px;
+  font-size: 14px; line-height: 1.5;
+  margin-bottom: 14px;
+}
+.why-box {
+  background: var(--surf2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13px; color: var(--muted); line-height: 1.5;
+  margin-bottom: 14px;
+}
+.why-box strong { color: var(--text); }
+.modal-meta { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.mimo-link {
+  display: block; text-align: center;
+  padding: 12px;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: var(--radius-sm);
+  color: var(--warn); text-decoration: none;
+  font-weight: 600; font-size: 14px;
+  margin-bottom: 14px;
+}
+
+/* ── SHOT ANIMATIONS ── */
+.anim-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #07090f;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+.anim-label {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px; font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.anim-root {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px;
+  position: relative;
+}
+
+/* Static */
+.anim-vf {
+  width: 80px; height: 56px;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.vf-c {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-color: rgba(0,71,187,0.7);
+  border-style: solid;
+}
+.vf-tl { top:0; left:0; border-width: 3px 0 0 3px; }
+.vf-tr { top:0; right:0; border-width: 3px 3px 0 0; }
+.vf-bl { bottom:0; left:0; border-width: 0 0 3px 3px; }
+.vf-br { bottom:0; right:0; border-width: 0 3px 3px 0; }
+.anim-lock { font-size: 26px; animation: lock-pulse 2.5s ease-in-out infinite; }
+@keyframes lock-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+/* Pan */
+.pan-scene {
+  width: 80%; height: 44%;
+  position: relative;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pan-sub {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  width: 18px; height: 28px;
+  background: rgba(0,71,187,0.7);
+  border-radius: 3px;
+  animation: pan-sub-move 3s ease-in-out infinite alternate;
+}
+@keyframes pan-sub-move { from { left: 8%; } to { left: 66%; } }
+.pan-arrow {
+  font-size: 26px; color: var(--accent);
+  animation: pan-arr-move 3s ease-in-out infinite alternate;
+}
+@keyframes pan-arr-move { from { transform: translateX(-18px); } to { transform: translateX(18px); } }
+
+/* Tilt */
+.tilt-scene {
+  width: 44%; height: 60%;
+  position: relative;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tilt-sub {
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  width: 28px; height: 10px;
+  background: rgba(0,71,187,0.7);
+  border-radius: 3px;
+  animation: tilt-sub-move 3s ease-in-out infinite alternate;
+}
+@keyframes tilt-sub-move { from { top: 10%; } to { top: 68%; } }
+.tilt-arrow {
+  font-size: 26px; color: var(--accent);
+  animation: tilt-arr-move 3s ease-in-out infinite alternate;
+}
+@keyframes tilt-arr-move { from { transform: translateY(-14px); } to { transform: translateY(14px); } }
+
+/* Tracking */
+.track-sub {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  width: 16px; height: 28px;
+  background: var(--accent);
+  border-radius: 3px;
+  animation: track-sub-move 3s ease-in-out infinite alternate;
+}
+@keyframes track-sub-move { from { left: 15%; } to { left: 62%; } }
+.track-frame {
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  width: 38px; height: 50px;
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 4px;
+  animation: track-frame-move 3s ease-in-out infinite alternate;
+  animation-delay: 0.25s;
+}
+@keyframes track-frame-move { from { left: 12%; } to { left: 59%; } }
+
+/* Slow-mo */
+.sm-bars {
+  display: flex; gap: 7px; align-items: center;
+  margin-bottom: 4px;
+}
+.sm-bar {
+  width: 5px; height: 36px;
+  background: rgba(0,71,187,0.5);
+  border-radius: 3px;
+  animation: sm-bar-anim 1.6s ease-in-out infinite;
+}
+.sm-bar:nth-child(2) { animation-delay: .2s; height: 54px; }
+.sm-bar:nth-child(3) { animation-delay: .4s; }
+@keyframes sm-bar-anim {
+  0%,100% { transform: scaleX(1); opacity: 0.5; filter: blur(0); }
+  50%      { transform: scaleX(3); opacity: 1;   filter: blur(1.5px); }
+}
+.fps-display { font-size: 22px; font-weight: 800; color: var(--warn); letter-spacing: 0.04em; }
+
+/* Hyperlapse */
+.hl-ring {
+  position: absolute;
+  width: 50px; height: 50px;
+  border: 2px solid rgba(0,71,187,0.7);
+  border-radius: 50%;
+  animation: hl-ring-expand 2.4s ease-out infinite;
+}
+.hl-r2 { animation-delay: .8s; }
+.hl-r3 { animation-delay: 1.6s; }
+@keyframes hl-ring-expand {
+  0%   { transform: scale(0.15); opacity: 1; }
+  100% { transform: scale(4);    opacity: 0; }
+}
+.hl-center { font-size: 22px; font-weight: 800; color: var(--accent); position: relative; z-index: 2; }
+
+/* Timelapse */
+.tl-clock { width: 64px; height: 64px; }
+.tl-hand { transform-origin: 30px 30px; animation: tl-rotate 1.8s linear infinite; }
+@keyframes tl-rotate { to { transform: rotate(360deg); } }
+.tl-sun {
+  position: absolute;
+  top: 10px; right: 18px;
+  font-size: 22px;
+  animation: tl-sun-bob 3s ease-in-out infinite;
+}
+@keyframes tl-sun-bob { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-8px); } }
+
+/* Zoom */
+.zoom-outer {
+  width: 78px; height: 54px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+}
+.zoom-inner {
+  border: 2px solid var(--accent);
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  animation: zoom-pulse 2.2s ease-in-out infinite;
+}
+@keyframes zoom-pulse {
+  0%,100% { width: 28px; height: 20px; }
+  50%      { width: 60px; height: 42px; }
+}
+.zoom-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+
+/* Custom */
+.custom-pencil { font-size: 48px; animation: pencil-rock 1.6s ease-in-out infinite; transform-origin: center bottom; }
+@keyframes pencil-rock { 0%,100%{ transform: rotate(-6deg); } 50%{ transform: rotate(6deg); } }
+
+/* Mimo overlay badge (inside anim-frame) */
+.mimo-overlay {
+  position: absolute;
+  bottom: 8px; right: 8px;
+  font-size: 10px; font-weight: 700;
+  background: var(--warn); color: #000;
+  border-radius: 4px; padding: 2px 7px;
+  z-index: 3;
+}
+
+/* ── BANNER TOAST ── */
+#app-banner {
+  display: none;
+  position: fixed;
+  top: calc(var(--hdr) + 8px);
+  left: 50%; transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 14px; font-weight: 600;
+  z-index: 200;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  pointer-events: none;
+}
+.ban-danger  { background: var(--danger);  color: #fff; }
+.ban-success { background: var(--success); color: #fff; }
+.ban-info    { background: var(--surf2);   color: var(--text); border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header id="app-header"></header>
+<div class="page-wrap">
+  <div id="content"></div>
+</div>
+<input type="file" id="file-input" accept=".json" style="display:none" onchange="onFileLoad(this)">
+<div id="app-banner"></div>
+
+<script>
+/* ──────────────────────────────────────────
+   CONSTANTS
+────────────────────────────────────────── */
+const DURATION_OPTS = [15, 30, 45, 60, 90, 120];
+const SKILL_LABELS  = ['', 'Beginner', 'Intermediate', 'Advanced'];
+const SKILL_TIPS    = [
+  '',
+  '📱 Static shots, simple pans & tilts — great for first timers',
+  '📱+ Add tracking shots and 60fps slow-motion',
+  '🎬 Unlock hyperlapse, timelapse (Mimo app), and 120fps slow-mo',
+];
+const SHOT_TYPES = {
+  'static':     { icon: '🔒', label: 'Static',     what: 'Camera is completely locked off — no movement whatsoever. Great for clean, stable shots.' },
+  'pan':        { icon: '↔',  label: 'Pan',         what: 'A horizontal camera sweep — rotate smoothly from left to right, or right to left.' },
+  'tilt':       { icon: '↕',  label: 'Tilt',        what: 'A vertical camera sweep — slowly tilt up to reveal height, or tilt down for drama.' },
+  'tracking':   { icon: '🎯', label: 'Tracking',    what: 'Walk alongside or follow a moving subject, keeping them framed as they move through the scene.' },
+  'slow-mo':    { icon: '🐢', label: 'Slow-Mo',     what: 'Set your phone to slow-motion mode and capture fast action to be played back slowly and beautifully.' },
+  'hyperlapse': { icon: '🚀', label: 'Hyperlapse',  what: 'Walk while filming, then use the Mimo app to dramatically speed up the movement into a fluid hyperlapse.' },
+  'timelapse':  { icon: '⏱',  label: 'Timelapse',   what: 'Lock your phone in one spot and let the Mimo app capture a scene unfolding over many minutes or hours.' },
+  'zoom':       { icon: '🔍', label: 'Zoom',        what: 'Move physically closer to your subject, or use an optical zoom lens if available on your phone.' },
+  'custom':     { icon: '✏️', label: 'Custom',      what: 'Your own creative shot idea — make it uniquely yours.' },
+};
+
+const LOADING_MSGS = [
+  'Analyzing your event…',
+  'Crafting the perfect shot sequence…',
+  'Consulting the b-roll playbook…',
+  'Thinking about golden hour lighting…',
+  'Building your shot list…',
+  'Checking the angles…',
+  'Almost ready…',
+];
+
+/* ──────────────────────────────────────────
+   STATE
+────────────────────────────────────────── */
+const S = {
+  screen: 'home',
+  form: {
+    eventName:    '',
+    topic:        '',
+    duration:     60,
+    skillLevel:   1,
+    projectName:  '',
+    nameTouched:  false,
+  },
+  project:          null,
+  projects:         [],
+  apiKey:           '',
+  proxyToken:       '',
+  proxyUrl:         '',
+  lensProfile:      null,
+  modalShotId:      null,
+  customFormOpen:   false,
+  newDirOpen:       false,
+  newDirText:       '',
+  _loadingTimer:    null,
+};
+
+/* ──────────────────────────────────────────
+   LOCAL STORAGE
+────────────────────────────────────────── */
+function saveProjects() {
+  try { localStorage.setItem('broll_projects', JSON.stringify(S.projects)); } catch(e) {}
+}
+function loadProjects() {
+  try { S.projects = JSON.parse(localStorage.getItem('broll_projects') || '[]'); } catch { S.projects = []; }
+}
+function saveApiKey(k) { S.apiKey = (k||'').trim(); localStorage.setItem('broll_apikey', S.apiKey); }
+function loadApiKey()  { S.apiKey = localStorage.getItem('broll_apikey') || ''; }
+function saveProxyCfg(url, token) {
+  S.proxyUrl   = (url||'').trim();
+  S.proxyToken = (token||'').trim();
+  localStorage.setItem('broll_proxy_url',   S.proxyUrl);
+  localStorage.setItem('broll_proxy_token', S.proxyToken);
+}
+function loadProxyCfg() {
+  S.proxyUrl   = localStorage.getItem('broll_proxy_url')   || '';
+  S.proxyToken = localStorage.getItem('broll_proxy_token') || '';
+}
+
+/* ──────────────────────────────────────────
+   UTILITIES
+────────────────────────────────────────── */
+function generateId() { return 'id-' + Math.random().toString(36).slice(2,9); }
+function countDone()  { return S.project ? S.project.shots.filter(s => s.completed).length : 0; }
+
+function showBanner(msg, type='info', ms=4000) {
+  const b = document.getElementById('app-banner');
+  if (!b) return;
+  b.className = 'ban-' + type;
+  b.textContent = msg;
+  b.style.display = 'block';
+  clearTimeout(b._t);
+  b._t = setTimeout(() => { b.style.display = 'none'; }, ms);
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+/* ──────────────────────────────────────────
+   NAVIGATION & RENDER
+────────────────────────────────────────── */
+function goTo(screen) { S.screen = screen; render(); }
+
+function render() {
+  clearInterval(S._loadingTimer);
+  updateHeader();
+  const el = document.getElementById('content');
+  if (!el) return;
+  if (S.screen === 'loading') { renderLoading(el); return; }
+  const screens = {
+    home:      renderHome,
+    settings:  renderSettings,
+    new:       renderNew,
+    checklist: renderChecklist,
+  };
+  el.innerHTML = (screens[S.screen] || renderHome)();
+  bindEvents();
+}
+
+function updateHeader() {
+  const h = document.getElementById('app-header');
+  if (!h) return;
+  const showBack     = S.screen !== 'home';
+  const showSettings = S.screen === 'home';
+  const showSave     = S.screen === 'checklist' && S.project;
+  const titles = { home:'<span class="blue">B-Roll</span> Planner', settings:'Settings', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List') };
+  h.innerHTML = `<div class="hdr-inner">
+    ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
+    <div class="hdr-title">${titles[S.screen]||'B-Roll Planner'}</div>
+    ${showSave ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
+    ${showSettings ? `<button class="hdr-btn" onclick="goTo('settings')" title="Settings">⚙</button>` : ''}
+  </div>`;
+}
+
+function goBack() {
+  S.customFormOpen = false;
+  S.newDirOpen = false;
+  goTo('home');
+}
+
+function bindEvents() {
+  /* Duration slider */
+  const dur = document.getElementById('f-duration');
+  if (dur) dur.addEventListener('input', () => {
+    S.form.duration = DURATION_OPTS[+dur.value] || 60;
+    const lbl = document.getElementById('dur-label');
+    if (lbl) lbl.textContent = S.form.duration + ' seconds';
+  });
+
+  /* Skill slider */
+  const skl = document.getElementById('f-skill');
+  if (skl) skl.addEventListener('input', () => {
+    S.form.skillLevel = +skl.value;
+    const lbl = document.getElementById('skill-label');
+    const tip = document.getElementById('skill-tip');
+    if (lbl) lbl.textContent = SKILL_LABELS[S.form.skillLevel];
+    if (tip) tip.textContent = SKILL_TIPS[S.form.skillLevel];
+  });
+
+  /* New direction textarea live-save */
+  const ndt = document.getElementById('new-dir-text');
+  if (ndt) ndt.addEventListener('input', () => { S.newDirText = ndt.value; });
+}
+
+/* ──────────────────────────────────────────
+   LENS DETECTION
+────────────────────────────────────────── */
+async function detectLenses() {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    const vids   = devices.filter(d => d.kind === 'videoinput');
+    /* If labels are blank we need permission first */
+    if (vids.every(d => !d.label)) {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({video:true});
+        s.getTracks().forEach(t => t.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch { /* denied – skip */ return; }
+    }
+    const labels  = devices.filter(d => d.kind === 'videoinput').map(d => d.label.toLowerCase());
+    const joined  = labels.join(' ');
+    S.lensProfile = {
+      ultrawide: /ultra[\s-]?wide|0\.5x/.test(joined),
+      telephoto: /tele|3x|5x|optical\s?zoom/.test(joined),
+      cinematic: /cine|depth|portrait/.test(joined),
+      count: labels.filter(l=>l).length,
+      labels,
+    };
+    /* Update badge if still on new project screen */
+    const badge = document.getElementById('lens-badge');
+    if (badge) badge.innerHTML = lensHtml();
+  } catch { /* ignore */ }
+}
+
+function lensDesc() {
+  if (!S.lensProfile || !S.lensProfile.labels.length) return null;
+  const parts = [];
+  if (S.lensProfile.ultrawide) parts.push('Ultrawide');
+  if (S.lensProfile.telephoto) parts.push('Telephoto');
+  if (S.lensProfile.cinematic) parts.push('Cinematic');
+  if (!parts.length && S.lensProfile.count > 1) parts.push(S.lensProfile.count + ' cameras');
+  return parts.length ? parts.join(' + ') : null;
+}
+
+function lensHtml() {
+  const d = lensDesc();
+  return d ? `<span class="lens-badge">📷 ${esc(d)} detected</span>` : '';
+}
+
+function lensPromptHint() {
+  const d = lensDesc();
+  if (!d) return '';
+  const lines = [];
+  if (S.lensProfile.ultrawide) lines.push('ultrawide lens (great for wide establishing shots and architecture sweeps)');
+  if (S.lensProfile.telephoto) lines.push('telephoto/zoom lens (great for compressed close-ups and speaker shots)');
+  if (S.lensProfile.cinematic) lines.push('cinematic/portrait mode (great for shallow depth-of-field people shots)');
+  return lines.length ? '\nThis user\'s phone has: ' + lines.join(', ') + '. Include shots that leverage these lenses.' : '';
+}
+
+/* ──────────────────────────────────────────
+   CLAUDE API
+────────────────────────────────────────── */
+function buildSystemPrompt() {
+  return `You are an expert videographer and b-roll consultant for corporate event and convention coverage. You help Pega employees create compelling short videos for social media and internal use.
+
+B-ROLL SHOT TYPES AVAILABLE:
+  static     – Camera completely locked off, no movement
+  pan        – Horizontal rotation left/right
+  tilt       – Vertical rotation up/down
+  tracking   – Camera physically follows a moving subject
+  slow-mo    – Captured at high frame rate (60fps or 120fps) for slow playback
+  hyperlapse – Walking shot dramatically sped up via the Mimo app
+  timelapse  – Stationary scene captured over time via the Mimo app
+  zoom       – Move closer to subject or use optical zoom
+
+SKILL-LEVEL RULES (strictly enforced):
+  Beginner (1)     → ONLY: static, pan, tilt
+  Intermediate (2) → Beginner types PLUS: tracking, slow-mo (fps: "60")
+  Advanced (3)     → All types including: hyperlapse, timelapse, slow-mo (fps: "120"), zoom
+
+MODERN CREATOR BEST PRACTICES:
+  - Rule of thirds framing
+  - Variety: wide establishing → medium detail → close macro
+  - Include people (reactions, arrivals, networking)
+  - Leading lines (corridors, escalators, signage rows)
+  - Over-the-shoulder perspectives for speaker sessions
+  - POV walking shots add energy
+
+SHOT ORDERING (follow this arc):
+  1. Arrival / hotel exterior / transportation
+  2. Venue exterior + signage
+  3. Venue interior architecture + details
+  4. Event branding / sponsor areas / expo floor
+  5. Session speakers / keynotes / screens
+  6. Crowd reactions / networking moments
+  7. Unique finds / quirky details
+  8. Departure / final establishing shot
+
+SHOT COUNT: Generate EXACTLY Math.round(durationSeconds / 4) shots. Example: 60s → 15 shots, 30s → 8 shots.
+
+OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary. No extra whitespace. Schema:
+{"projectName":"string","shots":[{"id":"shot-1","type":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false}]}
+  - app: null or "Mimo" (for hyperlapse/timelapse only)
+  - fps: null or "60" or "120" (for slow-mo only)`;
+}
+
+function buildUserMessage(newDir) {
+  const { eventName, topic, duration, skillLevel } = S.form;
+  const level = SKILL_LABELS[skillLevel];
+  const date  = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
+  const lens  = lensPromptHint();
+  const shotCount = Math.round(duration / 4);
+
+  if (newDir) {
+    const done   = S.project.shots.filter(s => s.completed);
+    const undone = S.project.shots.filter(s => !s.completed);
+    return `Original brief: ${duration}-second video about "${topic}" at ${eventName}. Skill: ${level}.${lens}
+
+SHOTS ALREADY FILMED – keep these VERBATIM in your response (do not alter them):
+${JSON.stringify(done)}
+
+SHOTS NOT YET FILMED – you may modify, replace, or remove these:
+${JSON.stringify(undone.map(s=>({id:s.id,type:s.type,title:s.title})))}
+
+NEW DIRECTION from the user: "${newDir}"
+
+Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new direction. Total shot count should still be approximately ${shotCount}. Return the same JSON schema.`;
+  }
+
+  return `Create a b-roll shot list for a ${duration}-second video (${shotCount} shots) about "${topic}" at ${eventName}. Skill level: ${level}. Date: ${date}.${lens}
+
+Suggested projectName format: "${eventName.split(',')[0].trim().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}"`;
+}
+
+async function callClaude(newDir) {
+  const useProxy = !!(S.proxyUrl && S.proxyToken);
+  if (!useProxy && !S.apiKey) {
+    showBanner('Please configure your API key or proxy token in Settings.', 'danger');
+    goTo('settings');
+    return;
+  }
+  if (!navigator.onLine) { showBanner('You appear to be offline. Connect to the internet and try again.', 'danger'); return; }
+
+  goTo('loading');
+
+  const payload = {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096,
+    system: buildSystemPrompt(),
+    messages: [{ role: 'user', content: buildUserMessage(newDir) }],
+  };
+
+  /* Proxy mode: call /api/claude with x-proxy-token.
+     Direct mode: call Anthropic directly with x-api-key (needs the dangerous-direct-browser-access header). */
+  const fetchUrl  = useProxy
+    ? S.proxyUrl
+    : 'https://api.anthropic.com/v1/messages';
+  const fetchHdrs = useProxy
+    ? { 'Content-Type': 'application/json', 'x-proxy-token': S.proxyToken }
+    : { 'Content-Type': 'application/json', 'x-api-key': S.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+
+  let attempt = 0;
+  while (attempt < 2) {
+    attempt++;
+    try {
+      const res = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: fetchHdrs,
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 401) { showBanner(useProxy ? 'Invalid proxy token — please check Settings.' : 'Invalid API key — please check Settings.', 'danger'); goTo('settings'); return; }
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error?.message || 'HTTP ' + res.status);
+      }
+
+      const data = await res.json();
+      let text = (data.content?.[0]?.text || '').trim();
+      /* Strip possible markdown fences */
+      text = text.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+
+      let parsed;
+      try { parsed = JSON.parse(text); }
+      catch { if (attempt < 2) { await sleep(1500); continue; } throw new Error('Claude returned unexpected output — try again.'); }
+
+      if (!Array.isArray(parsed.shots) || !parsed.shots.length) throw new Error('No shots were returned — try adjusting your inputs.');
+
+      if (newDir) {
+        S.project.shots = parsed.shots;
+        saveProjects();
+        S.newDirOpen = false;
+        S.newDirText = '';
+      } else {
+        const pname = (parsed.projectName || S.form.projectName || autoNameValue()).slice(0,60);
+        const project = {
+          id:         generateId(),
+          name:       pname,
+          createdAt:  new Date().toISOString(),
+          event:      S.form.eventName,
+          location:   S.form.eventName.split(',').slice(1).join(',').trim(),
+          topic:      S.form.topic,
+          duration:   S.form.duration,
+          skillLevel: S.form.skillLevel,
+          shots:      parsed.shots,
+        };
+        S.projects.unshift(project);
+        S.project = project;
+        saveProjects();
+      }
+      goTo('checklist');
+      return;
+
+    } catch(e) {
+      if (attempt >= 2) {
+        showBanner('Error: ' + e.message, 'danger', 7000);
+        goTo(newDir ? 'checklist' : 'new');
+        return;
+      }
+      await sleep(1500);
+    }
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ──────────────────────────────────────────
+   SAVE / LOAD JSON
+────────────────────────────────────────── */
+function downloadProject(id) {
+  const p = (id && S.projects.find(x => x.id === id)) || S.project;
+  if (!p) return;
+  const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: (p.name||'broll-project') + '.json' });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function onFileLoad(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const p = JSON.parse(e.target.result);
+      if (!p.id || !Array.isArray(p.shots)) throw new Error('Not a valid B-Roll Planner file.');
+      const idx = S.projects.findIndex(x => x.id === p.id);
+      if (idx >= 0) S.projects[idx] = p; else S.projects.unshift(p);
+      S.project = p;
+      /* Restore form context for new-direction calls */
+      S.form.eventName   = p.event      || '';
+      S.form.topic       = p.topic      || '';
+      S.form.duration    = p.duration   || 60;
+      S.form.skillLevel  = p.skillLevel || 1;
+      saveProjects();
+      goTo('checklist');
+    } catch(err) { showBanner('Could not load file: ' + err.message, 'danger'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+/* ──────────────────────────────────────────
+   SHOT OPERATIONS
+────────────────────────────────────────── */
+function toggleShot(id) {
+  if (!S.project) return;
+  const shot = S.project.shots.find(s => s.id === id);
+  if (!shot) return;
+  shot.completed = !shot.completed;
+  saveProjects();
+  /* Surgical DOM update */
+  const card = document.querySelector(`[data-shot-id="${id}"]`);
+  if (card) {
+    card.classList.toggle('done', shot.completed);
+    const circ = card.querySelector('.check-circle');
+    if (circ) circ.textContent = shot.completed ? '✓' : '';
+  }
+  updateProgress();
+}
+
+function updateProgress() {
+  const done  = countDone();
+  const total = S.project?.shots.length || 0;
+  const pct   = total ? Math.round((done/total)*100) : 0;
+  const fill  = document.getElementById('progress-fill');
+  const label = document.getElementById('progress-label');
+  if (fill)  fill.style.width = pct + '%';
+  if (label) label.textContent = done + '/' + total + ' shots · ' + pct + '%';
+}
+
+function openProject(id) {
+  const p = S.projects.find(x => x.id === id);
+  if (!p) return;
+  S.project       = p;
+  S.form.eventName  = p.event      || '';
+  S.form.topic      = p.topic      || '';
+  S.form.duration   = p.duration   || 60;
+  S.form.skillLevel = p.skillLevel || 1;
+  S.customFormOpen  = false;
+  S.newDirOpen      = false;
+  goTo('checklist');
+}
+
+function deleteProjectConfirm(id) {
+  const card = document.querySelector(`[data-proj-id="${id}"]`);
+  if (!card) return;
+  card.innerHTML = `<div class="delete-confirm">Delete this project?
+    <button class="btn btn-danger btn-sm" onclick="deleteProject('${id}')">Yes, delete</button>
+    <button class="btn btn-ghost btn-sm" onclick="render()">Cancel</button>
+  </div>`;
+}
+
+function deleteProject(id) {
+  S.projects = S.projects.filter(p => p.id !== id);
+  if (S.project?.id === id) S.project = null;
+  saveProjects();
+  render();
+}
+
+/* ──────────────────────────────────────────
+   MODAL
+────────────────────────────────────────── */
+function openShotModal(id) {
+  S.modalShotId = id;
+  const shot = S.project?.shots.find(s => s.id === id);
+  if (!shot) return;
+  const type    = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
+  const fpsBadge  = shot.fps  ? `<span class="badge-fps">${shot.fps}fps</span>` : '';
+  const mimoBadge = shot.app === 'Mimo' ? `<span class="badge-mimo">Mimo</span>` : '';
+  const mimoLink  = shot.app === 'Mimo'
+    ? `<a class="mimo-link" href="https://apps.apple.com/app/mimo/id1439532990" target="_blank" rel="noopener">📱 Get the Mimo App (iOS)</a>`
+    : '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'shot-modal';
+  overlay.innerHTML = `
+    <div class="modal-sheet">
+      <div class="modal-drag"></div>
+      ${renderShotAnimation(shot)}
+      <p class="shot-what">${esc(type.what)}</p>
+      <h2 class="modal-title">${esc(shot.title)}</h2>
+      <div class="modal-badges">
+        <span class="badge-type">${type.icon} ${type.label}</span>
+        ${fpsBadge}${mimoBadge}
+      </div>
+      <p class="modal-desc">${esc(shot.description)}</p>
+      <div class="tip-box">💡 ${esc(shot.tip)}</div>
+      <div class="why-box"><strong>Why 3–5 seconds?</strong><br>
+        Editors need at least 3 seconds of stable footage to cut cleanly. Shooting 5+ seconds gives you options and a safety buffer — always worth it.</div>
+      ${shot.duration ? `<p class="modal-meta">Suggested hold: <strong>${esc(shot.duration)}</strong></p>` : ''}
+      ${mimoLink}
+      <button class="btn btn-primary btn-full" onclick="closeShotModal()">Got it</button>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeShotModal(); });
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
+}
+
+function closeShotModal() {
+  const overlay = document.getElementById('shot-modal');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+}
+
+/* ──────────────────────────────────────────
+   CUSTOM SHOT
+────────────────────────────────────────── */
+function showCustomForm() {
+  S.customFormOpen = true;
+  const w = document.getElementById('custom-form-wrap');
+  if (w) w.innerHTML = customFormHtml();
+}
+
+function customFormHtml() {
+  return `<div class="custom-form">
+    <div class="custom-form-title">Add a Custom Shot</div>
+    <div class="form-group">
+      <label>Shot Title</label>
+      <input type="text" id="c-title" placeholder="e.g. Close-up of my conference badge" maxlength="60" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>What to shoot and how</label>
+      <textarea id="c-desc" placeholder="Describe the shot in detail…" rows="3"></textarea>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary" onclick="submitCustomShot()">Add Shot</button>
+      <button class="btn btn-ghost"   onclick="cancelCustomShot()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function submitCustomShot() {
+  const title = document.getElementById('c-title')?.value.trim();
+  const desc  = document.getElementById('c-desc')?.value.trim();
+  if (!title) { document.getElementById('c-title')?.focus(); return; }
+  const shot = { id: generateId(), type: 'custom', title, description: desc || 'Your custom shot.', duration: '3-5s', tip: 'Take your time and be creative.', app: null, fps: null, completed: false, custom: true };
+  S.project.shots.push(shot);
+  saveProjects();
+  S.customFormOpen = false;
+  goTo('checklist');
+}
+
+function cancelCustomShot() {
+  S.customFormOpen = false;
+  const w = document.getElementById('custom-form-wrap');
+  if (w) w.innerHTML = `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Custom Shot</button>`;
+}
+
+/* ──────────────────────────────────────────
+   NEW DIRECTION PANEL
+────────────────────────────────────────── */
+function toggleNewDir() {
+  S.newDirOpen = !S.newDirOpen;
+  const panel = document.getElementById('new-dir-panel');
+  if (panel) panel.innerHTML = newDirHtml();
+  /* Re-bind textarea listener */
+  const ndt = document.getElementById('new-dir-text');
+  if (ndt) ndt.addEventListener('input', () => { S.newDirText = ndt.value; });
+}
+
+function newDirHtml() {
+  if (!S.newDirOpen) {
+    return `<button class="btn btn-ghost new-dir-toggle" onclick="toggleNewDir()">↩ Going a new direction with the shoot?</button>`;
+  }
+  return `<div class="new-dir-form">
+    <h3>Going a new direction?</h3>
+    <p class="new-dir-desc">Tell me what changed. I'll keep your completed shots and update the rest around your new focus.</p>
+    <div class="form-group">
+      <textarea id="new-dir-text" rows="3" placeholder="e.g. The keynote got cancelled — let's focus on the expo floor and networking instead…">${esc(S.newDirText)}</textarea>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary" onclick="submitNewDir()">Refresh Shot List</button>
+      <button class="btn btn-ghost"   onclick="toggleNewDir()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function submitNewDir() {
+  const text = document.getElementById('new-dir-text')?.value.trim();
+  if (!text) { document.getElementById('new-dir-text')?.focus(); return; }
+  S.newDirText = text;
+  callClaude(text);
+}
+
+/* ──────────────────────────────────────────
+   LOADING SCREEN
+────────────────────────────────────────── */
+function renderLoading(el) {
+  let idx = 0;
+  el.innerHTML = `<div class="loading-wrap">
+    <div class="loading-spinner"></div>
+    <p class="loading-msg" id="load-msg">${LOADING_MSGS[0]}</p>
+    <p class="loading-sub">This usually takes 10–15 seconds</p>
+  </div>`;
+  clearInterval(S._loadingTimer);
+  S._loadingTimer = setInterval(() => {
+    idx = (idx + 1) % LOADING_MSGS.length;
+    const m = document.getElementById('load-msg');
+    if (m) m.textContent = LOADING_MSGS[idx]; else clearInterval(S._loadingTimer);
+  }, 2500);
+}
+
+/* ──────────────────────────────────────────
+   SCREEN: HOME
+────────────────────────────────────────── */
+function renderHome() {
+  if (!S.projects.length) {
+    return `<div class="empty-state">
+      <div class="empty-icon">🎬</div>
+      <h2>Ready to roll?</h2>
+      <p>Create your first b-roll shot list for an upcoming Pega event and start shooting like a pro.</p>
+    </div>
+    <div class="home-actions">
+      <button class="btn btn-primary btn-large" onclick="startNew()">＋ New Project</button>
+      <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
+    </div>`;
+  }
+
+  const cards = S.projects.map(p => {
+    const done = p.shots.filter(s => s.completed).length;
+    const pct  = p.shots.length ? Math.round((done/p.shots.length)*100) : 0;
+    return `<div class="project-card" data-proj-id="${p.id}">
+      <div class="project-card-main" onclick="openProject('${p.id}')">
+        <div class="project-card-info">
+          <div class="project-name">${esc(p.name||'Untitled Project')}</div>
+          <div class="project-meta">${esc(p.event||'')} · ${p.shots.length} shots</div>
+          <div class="mini-progress-track"><div class="mini-progress-fill" style="width:${pct}%"></div></div>
+          <div class="project-pct">${pct}% complete</div>
+        </div>
+        <div class="project-arrow">›</div>
+      </div>
+      <div class="project-card-actions">
+        <button class="proj-action-btn" title="Open" onclick="openProject('${p.id}')">Open</button>
+        <button class="proj-action-btn" title="Download" onclick="downloadProject('${p.id}')">↓ Save</button>
+        <button class="proj-action-btn del" title="Delete" onclick="deleteProjectConfirm('${p.id}')">✕ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<p class="section-title">Your Projects</p>
+    <div class="project-list">${cards}</div>
+    <div class="home-actions">
+      <button class="btn btn-primary btn-large" onclick="startNew()">＋ New Project</button>
+      <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
+    </div>`;
+}
+
+/* ──────────────────────────────────────────
+   SCREEN: SETTINGS
+────────────────────────────────────────── */
+function renderSettings() {
+  return `<div>
+    <div class="screen-title">Settings</div>
+
+    <div style="background:rgba(0,71,187,0.08);border:1px solid rgba(0,71,187,0.25);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:24px;font-size:13px;line-height:1.6;color:var(--muted)">
+      <strong style="color:var(--text)">Team setup (recommended)</strong><br>
+      If your admin has set up the shared proxy, enter the proxy URL and token below. Your Anthropic API key stays safely on the server — you never need to handle it.
+    </div>
+
+    <div class="form-group">
+      <label>Proxy URL</label>
+      <input type="text" id="proxy-url-input" placeholder="/api/claude" value="${esc(S.proxyUrl)}" autocomplete="off">
+      <div class="form-hint">Leave as <code>/api/claude</code> if the app is hosted on Vercel. Ask your admin if unsure.</div>
+    </div>
+
+    <div class="form-group">
+      <label>Proxy Token</label>
+      <input type="password" id="proxy-token-input" placeholder="Shared secret from your admin" value="${esc(S.proxyToken)}" autocomplete="off">
+      <div class="form-hint">The shared password your admin distributes to the team. Stored only in this browser.</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin:20px 0 20px;color:var(--muted);font-size:13px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      or, for personal use only
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Your own Claude API Key</label>
+      <input type="password" id="api-key-input" placeholder="sk-ant-api03-…" value="${esc(S.apiKey)}" autocomplete="off">
+      <div class="form-hint">Calls Anthropic directly from your browser. The proxy token above takes priority if both are set.</div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="saveSettings()">Save &amp; Continue</button>
+    <a class="api-key-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get your own Claude API key →</a>
+  </div>`;
+}
+
+function saveSettings() {
+  const proxyUrl   = document.getElementById('proxy-url-input')?.value?.trim();
+  const proxyToken = document.getElementById('proxy-token-input')?.value?.trim();
+  const apiKey     = document.getElementById('api-key-input')?.value?.trim();
+
+  const hasProxy  = !!(proxyUrl && proxyToken);
+  const hasDirect = !!apiKey;
+
+  if (!hasProxy && !hasDirect) {
+    showBanner('Enter either a proxy token or your own API key.', 'danger');
+    return;
+  }
+
+  if (hasProxy || proxyUrl || proxyToken) saveProxyCfg(proxyUrl || '/api/claude', proxyToken || '');
+  if (apiKey) saveApiKey(apiKey);
+
+  showBanner('Settings saved!', 'success');
+  goTo('home');
+}
+
+/* ──────────────────────────────────────────
+   SCREEN: NEW PROJECT
+────────────────────────────────────────── */
+function startNew() {
+  S.form = { eventName:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false };
+  S.lensProfile = null;
+  goTo('new');
+  detectLenses(); /* async — updates badge when ready */
+}
+
+function autoNameValue() {
+  if (!S.form.eventName) return 'My-Event-' + new Date().toISOString().slice(0,10);
+  const base = S.form.eventName.split(',')[0].trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'');
+  return (base || 'Event') + '-' + new Date().toISOString().slice(0,10);
+}
+
+function autoName() {
+  if (S.form.nameTouched) return;
+  S.form.projectName = autoNameValue();
+  const el = document.getElementById('proj-name-edit');
+  if (el && document.activeElement !== el) el.textContent = S.form.projectName;
+}
+
+function renderNew() {
+  const durIdx = Math.max(0, DURATION_OPTS.indexOf(S.form.duration));
+  return `<div>
+    <div class="screen-title">New Project</div>
+
+    <div class="form-group">
+      <label>Event name &amp; location</label>
+      <input type="text" id="f-event" value="${esc(S.form.eventName)}"
+             placeholder="e.g. PegaWorld, Las Vegas"
+             oninput="S.form.eventName=this.value;autoName()" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>What is the video about?</label>
+      <input type="text" id="f-topic" value="${esc(S.form.topic)}"
+             placeholder="e.g. How fun the trip was"
+             oninput="S.form.topic=this.value" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>Video length: <strong id="dur-label">${S.form.duration} seconds</strong></label>
+      <input type="range" id="f-duration" min="0" max="5" step="1" value="${durIdx}">
+      <div class="slider-labels">
+        ${DURATION_OPTS.map(d=>`<span>${d}s</span>`).join('')}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Your skill level: <strong id="skill-label">${SKILL_LABELS[S.form.skillLevel]}</strong></label>
+      <input type="range" id="f-skill" min="1" max="3" step="1" value="${S.form.skillLevel}">
+      <div class="slider-labels"><span>Beginner</span><span>Intermediate</span><span>Advanced</span></div>
+      <div class="skill-tip" id="skill-tip">${SKILL_TIPS[S.form.skillLevel]}</div>
+    </div>
+
+    <div class="form-group">
+      <label>Project name <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(tap to rename)</span></label>
+      <span id="proj-name-edit" class="ce-input" contenteditable="true" role="textbox"
+            aria-label="Project name" data-placeholder="Auto-generated from event name"
+            oninput="S.form.projectName=this.textContent.trim();S.form.nameTouched=true"
+            >${esc(S.form.projectName || autoNameValue())}</span>
+    </div>
+
+    <div id="lens-badge" class="lens-badge-wrap">${lensHtml()}</div>
+
+    <button class="btn btn-primary btn-large" onclick="validateAndGenerate()">
+      ✨ Generate My Shot List
+    </button>
+  </div>`;
+}
+
+function validateAndGenerate() {
+  if (!S.form.eventName.trim()) { showBanner('Please enter an event name.', 'danger'); document.getElementById('f-event')?.focus(); return; }
+  if (!S.form.topic.trim()) { showBanner('Please tell us what the video is about.', 'danger'); document.getElementById('f-topic')?.focus(); return; }
+  const nameEl = document.getElementById('proj-name-edit');
+  if (nameEl) S.form.projectName = nameEl.textContent.trim() || autoNameValue();
+  callClaude(null);
+}
+
+/* ──────────────────────────────────────────
+   SCREEN: CHECKLIST
+────────────────────────────────────────── */
+function renderChecklist() {
+  if (!S.project) return `<p style="color:var(--muted);padding:40px 0;text-align:center">No project loaded. <button class="btn btn-ghost btn-sm" onclick="goTo('home')">Go Home</button></p>`;
+  const shots = S.project.shots || [];
+  const done  = countDone();
+  const total = shots.length;
+  const pct   = total ? Math.round((done/total)*100) : 0;
+
+  const customSection = S.customFormOpen
+    ? customFormHtml()
+    : `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Custom Shot</button>`;
+
+  return `<div class="checklist-hdr">
+    <span class="proj-title-edit" contenteditable="true" role="textbox"
+          oninput="S.project.name=this.textContent.trim();saveProjects();updateHeader()"
+          >${esc(S.project.name||'Untitled')}</span>
+    <div id="progress-label" class="progress-label">${done}/${total} shots · ${pct}%</div>
+    <div class="progress-track"><div id="progress-fill" class="progress-fill" style="width:${pct}%"></div></div>
+  </div>
+
+  <div class="tip-banner">💡 Hold each shot for at least <strong>3–5 seconds</strong> before moving — editors need the breathing room!</div>
+
+  <div class="shot-list" id="shot-list">
+    ${shots.map(s => shotCardHtml(s)).join('')}
+  </div>
+
+  <div class="custom-form-wrap" id="custom-form-wrap">${customSection}</div>
+
+  <div class="new-dir-wrap" id="new-dir-panel">${newDirHtml()}</div>
+
+  <div class="checklist-footer">
+    <button class="btn btn-ghost" onclick="downloadProject(S.project.id)">↓ Save as JSON</button>
+    <button class="btn btn-ghost" onclick="goTo('home')">← All Projects</button>
+  </div>`;
+}
+
+function shotCardHtml(shot) {
+  const type    = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
+  const fps     = shot.fps  ? `<span class="fps-badge-sm">${shot.fps}fps</span>` : '';
+  const mimo    = shot.app === 'Mimo' ? `<span class="mimo-badge-sm">Mimo</span>` : '';
+  return `<div class="shot-card ${shot.completed ? 'done' : ''}" data-shot-id="${shot.id}" onclick="toggleShot('${shot.id}')">
+    <div class="check-circle">${shot.completed ? '✓' : ''}</div>
+    <div class="shot-info">
+      <div class="shot-type-badge">${type.icon} ${type.label}${fps}${mimo}</div>
+      <div class="shot-title">${esc(shot.title)}</div>
+    </div>
+    <button class="shot-expand" title="Learn more about this shot" onclick="event.stopPropagation();openShotModal('${shot.id}')">ⓘ</button>
+  </div>`;
+}
+
+/* ──────────────────────────────────────────
+   SHOT ANIMATIONS
+────────────────────────────────────────── */
+function renderShotAnimation(shot) {
+  const fns = {
+    'static':     animStatic,
+    'pan':        animPan,
+    'tilt':       animTilt,
+    'tracking':   animTracking,
+    'slow-mo':    animSlowMo,
+    'hyperlapse': animHyperlapse,
+    'timelapse':  animTimelapse,
+    'zoom':       animZoom,
+    'custom':     animCustom,
+  };
+  const fn = fns[shot.type] || animStatic;
+  return `<div class="anim-frame">${fn(shot)}</div>`;
+}
+
+function animStatic(s) {
+  return `<div class="anim-root">
+    <div class="anim-vf">
+      <div class="vf-c vf-tl"></div><div class="vf-c vf-tr"></div>
+      <div class="vf-c vf-bl"></div><div class="vf-c vf-br"></div>
+      <div class="anim-lock">🔒</div>
+    </div>
+  </div>
+  <div class="anim-label">Locked Off — No Movement</div>`;
+}
+
+function animPan(s) {
+  return `<div class="anim-root">
+    <div class="pan-scene">
+      <div class="pan-sub"></div>
+    </div>
+    <div class="pan-arrow">→</div>
+  </div>
+  <div class="anim-label">Pan — Horizontal Sweep</div>`;
+}
+
+function animTilt(s) {
+  return `<div class="anim-root" style="flex-direction:row;gap:16px">
+    <div class="tilt-scene">
+      <div class="tilt-sub"></div>
+    </div>
+    <div class="tilt-arrow">↓</div>
+  </div>
+  <div class="anim-label">Tilt — Vertical Sweep</div>`;
+}
+
+function animTracking(s) {
+  return `<div class="anim-root" style="position:relative">
+    <div class="track-sub"></div>
+    <div class="track-frame"></div>
+  </div>
+  <div class="anim-label">Tracking — Follow the Subject</div>`;
+}
+
+function animSlowMo(s) {
+  return `<div class="anim-root">
+    <div class="sm-bars">
+      <div class="sm-bar"></div><div class="sm-bar"></div><div class="sm-bar"></div>
+    </div>
+    <div class="fps-display">${s.fps||'60'}fps</div>
+  </div>
+  <div class="anim-label">Slow Motion</div>`;
+}
+
+function animHyperlapse(s) {
+  return `<div class="anim-root" style="position:relative">
+    <div class="hl-ring"></div>
+    <div class="hl-ring hl-r2"></div>
+    <div class="hl-ring hl-r3"></div>
+    <div class="hl-center">▶▶</div>
+    <div class="mimo-overlay">Mimo</div>
+  </div>
+  <div class="anim-label">Hyperlapse — Walk &amp; Speed Up</div>`;
+}
+
+function animTimelapse(s) {
+  return `<div class="anim-root" style="position:relative">
+    <svg class="tl-clock" viewBox="0 0 60 60">
+      <circle cx="30" cy="30" r="26" stroke="rgba(0,71,187,0.6)" stroke-width="3" fill="none"/>
+      <line class="tl-hand" x1="30" y1="30" x2="30" y2="8" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <div class="tl-sun">☀️</div>
+    <div class="mimo-overlay">Mimo</div>
+  </div>
+  <div class="anim-label">Timelapse — Lock &amp; Let Time Pass</div>`;
+}
+
+function animZoom(s) {
+  return `<div class="anim-root">
+    <div class="zoom-outer">
+      <div class="zoom-inner">
+        <div class="zoom-dot"></div>
+      </div>
+    </div>
+  </div>
+  <div class="anim-label">Zoom — Move Closer</div>`;
+}
+
+function animCustom(s) {
+  return `<div class="anim-root">
+    <div class="custom-pencil">✏️</div>
+  </div>
+  <div class="anim-label">Your Custom Shot</div>`;
+}
+
+/* ──────────────────────────────────────────
+   INIT
+────────────────────────────────────────── */
+(function init() {
+  loadProjects();
+  loadApiKey();
+  loadProxyCfg();
+  const configured = S.apiKey || (S.proxyToken && S.proxyUrl);
+  S.screen = configured ? 'home' : 'settings';
+  render();
+})();
+</script>
+</body>
+</html>
