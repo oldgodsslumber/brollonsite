@@ -1001,12 +1001,13 @@ const LOADING_MSGS = [
 const S = {
   screen: 'home',
   form: {
-    eventName:    '',
-    topic:        '',
-    duration:     60,
-    skillLevel:   1,
-    projectName:  '',
-    nameTouched:  false,
+    eventName:     '',
+    eventLocation: '',
+    topic:         '',
+    duration:      60,
+    skillLevel:    1,
+    projectName:   '',
+    nameTouched:   false,
   },
   project:          null,
   projects:         [],
@@ -1290,7 +1291,7 @@ OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary
 }
 
 function buildUserMessage(newDir) {
-  const { eventName, topic, duration, skillLevel } = S.form;
+  const { eventName, eventLocation, topic, duration, skillLevel } = S.form;
   const level = SKILL_LABELS[skillLevel];
   const date  = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
   const lens  = lensPromptHint();
@@ -1299,7 +1300,12 @@ function buildUserMessage(newDir) {
   if (newDir) {
     const done   = S.project.shots.filter(s => s.completed);
     const undone = S.project.shots.filter(s => !s.completed);
-    return `Original brief: ${duration}-second video about "${topic}" at ${eventName}. Skill: ${level}.${lens}
+  const fullEvent = eventLocation ? `${eventName} in ${eventLocation}` : eventName;
+
+  if (newDir) {
+    const done   = S.project.shots.filter(s => s.completed);
+    const undone = S.project.shots.filter(s => !s.completed);
+    return `Original brief: ${duration}-second video about "${topic}" at ${fullEvent}. Skill: ${level}.${lens}
 
 SHOTS ALREADY FILMED – keep these VERBATIM in your response (do not alter them):
 ${JSON.stringify(done)}
@@ -1312,9 +1318,9 @@ NEW DIRECTION from the user: "${newDir}"
 Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new direction. Total shot count should still be approximately ${shotCount}. Return the same JSON schema.`;
   }
 
-  return `Create a b-roll shot list for a ${duration}-second video (${shotCount} shots) about "${topic}" at ${eventName}. Skill level: ${level}. Date: ${date}.${lens}
+  return `Create a b-roll shot list for a ${duration}-second video (${shotCount} shots) about "${topic}" at ${fullEvent}. Skill level: ${level}. Date: ${date}.${lens}
 
-Suggested projectName format: "${eventName.split(',')[0].trim().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}"`;
+Suggested projectName format: "${eventName.trim().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}"`;
 }
 
 async function callClaude(newDir) {
@@ -1371,7 +1377,7 @@ async function callClaude(newDir) {
           name:       pname,
           createdAt:  new Date().toISOString(),
           event:      S.form.eventName,
-          location:   S.form.eventName.split(',').slice(1).join(',').trim(),
+          location:   S.form.eventLocation,
           topic:      S.form.topic,
           duration:   S.form.duration,
           skillLevel: S.form.skillLevel,
@@ -1425,9 +1431,10 @@ function onFileLoad(input) {
       if (idx >= 0) S.projects[idx] = p; else S.projects.unshift(p);
       S.project = p;
       /* Restore form context for new-direction calls */
-      S.form.eventName   = p.event      || '';
-      S.form.topic       = p.topic      || '';
-      S.form.duration    = p.duration   || 60;
+      S.form.eventName     = p.event      || '';
+      S.form.eventLocation = p.location  || '';
+      S.form.topic         = p.topic     || '';
+      S.form.duration      = p.duration  || 60;
       S.form.skillLevel  = p.skillLevel || 1;
       saveProjects();
       goTo('checklist');
@@ -1471,9 +1478,10 @@ function openProject(id) {
   if (!p) return;
   ensureSections(p);
   S.project       = p;
-  S.form.eventName  = p.event      || '';
-  S.form.topic      = p.topic      || '';
-  S.form.duration   = p.duration   || 60;
+  S.form.eventName     = p.event     || '';
+  S.form.eventLocation = p.location || '';
+  S.form.topic         = p.topic    || '';
+  S.form.duration      = p.duration || 60;
   S.form.skillLevel = p.skillLevel || 1;
   S.customFormOpen  = false;
   S.customSectionTarget = null;
@@ -2192,7 +2200,7 @@ function builderSave() {
    SCREEN: NEW PROJECT
 ────────────────────────────────────────── */
 function startNew() {
-  S.form = { eventName:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false };
+  S.form = { eventName:'', eventLocation:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false };
   S.lensProfile = null;
   goTo('new');
   detectLenses(); /* async — updates badge when ready */
@@ -2200,7 +2208,7 @@ function startNew() {
 
 function autoNameValue() {
   if (!S.form.eventName) return 'My-Event-' + new Date().toISOString().slice(0,10);
-  const base = S.form.eventName.split(',')[0].trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'');
+  const base = S.form.eventName.trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'');
   return (base || 'Event') + '-' + new Date().toISOString().slice(0,10);
 }
 
@@ -2217,10 +2225,17 @@ function renderNew() {
     <div class="screen-title">New Project</div>
 
     <div class="form-group">
-      <label>Event name &amp; location</label>
+      <label>Event name</label>
       <input type="text" id="f-event" value="${esc(S.form.eventName)}"
-             placeholder="e.g. PegaWorld, Las Vegas"
+             placeholder="e.g. PegaWorld iGov Summit"
              oninput="S.form.eventName=this.value;autoName()" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>Location</label>
+      <input type="text" id="f-location" value="${esc(S.form.eventLocation)}"
+             placeholder="e.g. Las Vegas, NV"
+             oninput="S.form.eventLocation=this.value" autocomplete="off">
     </div>
 
     <div class="form-group">
@@ -2263,6 +2278,7 @@ function renderNew() {
 
 function validateAndGenerate() {
   if (!S.form.eventName.trim()) { showBanner('Please enter an event name.', 'danger'); document.getElementById('f-event')?.focus(); return; }
+  if (!S.form.eventLocation.trim()) { showBanner('Please enter a location.', 'danger'); document.getElementById('f-location')?.focus(); return; }
   if (!S.form.topic.trim()) { showBanner('Please tell us what the video is about.', 'danger'); document.getElementById('f-topic')?.focus(); return; }
   const nameEl = document.getElementById('proj-name-edit');
   if (nameEl) S.form.projectName = nameEl.textContent.trim() || autoNameValue();
