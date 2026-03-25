@@ -738,6 +738,144 @@ input[type=range]::-moz-range-thumb {
   z-index: 3;
 }
 
+/* ── SECTION HEADERS IN CHECKLIST ── */
+.shot-section {
+  margin-bottom: 6px;
+}
+.shot-section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.shot-section-hdr-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  cursor: text;
+  min-width: 0;
+}
+.shot-section-hdr-title:focus { outline: none; color: var(--text); }
+.section-shot-count {
+  font-size: 11px;
+  color: var(--surf3);
+  background: var(--surf2);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.add-section-btn {
+  width: 100%;
+  border-style: dashed !important;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.add-section-form {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-top: 8px;
+}
+
+/* ── SORT BUTTONS ── */
+.sort-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--surf3);
+  font-size: 13px;
+  min-width: 26px;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.sort-btn:hover { color: var(--muted); background: var(--surf2); }
+.sort-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+
+/* ── TYPE HINT ── */
+.type-hint {
+  font-size: 12px;
+  color: var(--accent);
+  background: rgba(0,71,187,0.07);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-top: 6px;
+  line-height: 1.5;
+  display: none;
+}
+.type-hint.visible { display: block; }
+
+/* ── BUILDER SCREEN ── */
+.builder-intro {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.builder-section {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.builder-section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surf2);
+}
+.builder-section-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+}
+.builder-section-name:focus { outline: none; }
+.builder-section-body { padding: 8px 14px 12px; }
+.builder-shot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.builder-shot-row:last-child { border-bottom: none; }
+.builder-shot-type { color: var(--accent); font-weight: 700; flex-shrink: 0; font-size: 12px; }
+.builder-shot-title { flex: 1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.builder-shot-del { background: none; border: none; cursor: pointer; color: var(--surf3); font-size: 15px; padding: 4px; border-radius: 4px; transition: color .15s; }
+.builder-shot-del:hover { color: var(--danger); }
+.builder-add-shot-btn { width: 100%; margin-top: 8px; font-size: 13px; }
+.builder-shot-form {
+  margin-top: 10px;
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.builder-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* ── BANNER TOAST ── */
 #app-banner {
   display: none;
@@ -819,8 +957,12 @@ const S = {
   lensProfile:      null,
   modalShotId:      null,
   customFormOpen:   false,
+  customSectionTarget: null,  /* which section "Add Shot" was clicked from */
   newDirOpen:       false,
   newDirText:       '',
+  builderSections:  [],       /* [{name, shots:[]}] for the builder screen */
+  builderName:      '',
+  builderAddingTo:  null,     /* section name currently showing add-shot form */
   _loadingTimer:    null,
 };
 
@@ -839,6 +981,39 @@ function loadProjects() {
 ────────────────────────────────────────── */
 function generateId() { return 'id-' + Math.random().toString(36).slice(2,9); }
 function countDone()  { return S.project ? S.project.shots.filter(s => s.completed).length : 0; }
+
+/* Extract ordered section names from a shots array (preserving first-seen order) */
+function extractSections(shots) {
+  const seen = new Set();
+  const out  = [];
+  for (const s of shots) {
+    const sec = (s.section || 'Unsectioned');
+    if (!seen.has(sec)) { seen.add(sec); out.push(sec); }
+  }
+  return out;
+}
+
+/* Return shots grouped by section, respecting project.sections order */
+function shotsBySection(project) {
+  const shots    = project.shots || [];
+  const sections = project.sections?.length ? project.sections : extractSections(shots);
+  const map      = {};
+  for (const sec of sections) map[sec] = [];
+  /* Shots with unknown section fall into their own bucket at the end */
+  for (const s of shots) {
+    const sec = s.section || 'Unsectioned';
+    if (!map[sec]) { sections.push(sec); map[sec] = []; }
+    map[sec].push(s);
+  }
+  return { sections, map };
+}
+
+/* Ensure project.sections exists (backwards-compat for loaded old JSONs) */
+function ensureSections(project) {
+  if (!project.sections || !project.sections.length) {
+    project.sections = extractSections(project.shots || []);
+  }
+}
 
 function showBanner(msg, type='info', ms=4000) {
   const b = document.getElementById('app-banner');
@@ -873,6 +1048,7 @@ function render() {
     home:      renderHome,
     new:       renderNew,
     checklist: renderChecklist,
+    builder:   renderBuilder,
   };
   el.innerHTML = (screens[S.screen] || renderHome)();
   bindEvents();
@@ -883,7 +1059,7 @@ function updateHeader() {
   if (!h) return;
   const showBack     = S.screen !== 'home';
   const showSave = S.screen === 'checklist' && S.project;
-  const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List') };
+  const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder' };
   h.innerHTML = `<div class="hdr-inner">
     ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
     <div class="hdr-title">${titles[S.screen]||'B-Roll Planner'}</div>
@@ -919,6 +1095,26 @@ function bindEvents() {
   /* New direction textarea live-save */
   const ndt = document.getElementById('new-dir-text');
   if (ndt) ndt.addEventListener('input', () => { S.newDirText = ndt.value; });
+
+  /* Custom form: show/hide new-section input + type hint */
+  const ctype = document.getElementById('c-type');
+  if (ctype) ctype.addEventListener('change', updateTypeHint);
+  const csec = document.getElementById('c-section');
+  if (csec) csec.addEventListener('change', () => {
+    const ni = document.getElementById('c-section-new');
+    if (ni) ni.style.display = csec.value === '__new__' ? '' : 'none';
+  });
+
+  /* Builder: wire type hints for all bld-type-N selects */
+  document.querySelectorAll('[id^="bld-type-"]').forEach(sel => {
+    const si   = sel.id.split('-').pop();
+    const hint = document.getElementById('bld-hint-' + si);
+    if (hint) sel.addEventListener('change', () => {
+      const t = SHOT_TYPES[sel.value];
+      if (t) { hint.textContent = t.what; hint.classList.add('visible'); }
+      else   { hint.classList.remove('visible'); }
+    });
+  });
 }
 
 /* ──────────────────────────────────────────
@@ -1006,20 +1202,29 @@ MODERN CREATOR BEST PRACTICES:
   - Over-the-shoulder perspectives for speaker sessions
   - POV walking shots add energy
 
-SHOT ORDERING (follow this arc):
-  1. Arrival / hotel exterior / transportation
-  2. Venue exterior + signage
-  3. Venue interior architecture + details
-  4. Event branding / sponsor areas / expo floor
-  5. Session speakers / keynotes / screens
-  6. Crowd reactions / networking moments
-  7. Unique finds / quirky details
-  8. Departure / final establishing shot
+SECTIONS — assign every shot to exactly one of these section names (use the exact string):
+  "Arrival"           – getting there, hotel, transportation
+  "Venue & Signage"   – exterior of venue, event branding, signs
+  "Architecture"      – interior details, décor, architecture
+  "Expo & Sessions"   – speaker stages, sessions, keynotes, expo floor
+  "Crowd & Culture"   – people, reactions, networking moments
+  "Details"           – macro details, quirky finds, textures
+  "Departure"         – leaving, final shots, goodbye moments
+
+SHOT ORDERING (follow this arc — order shots within each section logically):
+  1. Arrival
+  2. Venue & Signage
+  3. Architecture
+  4. Expo & Sessions
+  5. Crowd & Culture
+  6. Details
+  7. Departure
 
 SHOT COUNT: Generate EXACTLY Math.round(durationSeconds / 4) shots. Example: 60s → 15 shots, 30s → 8 shots.
 
 OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary. No extra whitespace. Schema:
-{"projectName":"string","shots":[{"id":"shot-1","type":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false}]}
+{"projectName":"string","shots":[{"id":"shot-1","type":"string","section":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false}]}
+  - section: one of the 7 section names above (required)
   - app: null or "Mimo" (for hyperlapse/timelapse only)
   - fps: null or "60" or "120" (for slow-mo only)`;
 }
@@ -1095,6 +1300,7 @@ async function callClaude(newDir) {
 
       if (newDir) {
         S.project.shots = parsed.shots;
+        S.project.sections = extractSections(parsed.shots);
         saveProjects();
         S.newDirOpen = false;
         S.newDirText = '';
@@ -1110,6 +1316,7 @@ async function callClaude(newDir) {
           duration:   S.form.duration,
           skillLevel: S.form.skillLevel,
           shots:      parsed.shots,
+          sections:   extractSections(parsed.shots),
         };
         S.projects.unshift(project);
         S.project = project;
@@ -1202,12 +1409,14 @@ function updateProgress() {
 function openProject(id) {
   const p = S.projects.find(x => x.id === id);
   if (!p) return;
+  ensureSections(p);
   S.project       = p;
   S.form.eventName  = p.event      || '';
   S.form.topic      = p.topic      || '';
   S.form.duration   = p.duration   || 60;
   S.form.skillLevel = p.skillLevel || 1;
   S.customFormOpen  = false;
+  S.customSectionTarget = null;
   S.newDirOpen      = false;
   goTo('checklist');
 }
@@ -1226,6 +1435,91 @@ function deleteProject(id) {
   if (S.project?.id === id) S.project = null;
   saveProjects();
   render();
+}
+
+/* ──────────────────────────────────────────
+   SORT & SECTION MANAGEMENT
+────────────────────────────────────────── */
+function moveShot(id, dir) {
+  if (!S.project) return;
+  const shots = S.project.shots;
+  const idx   = shots.findIndex(s => s.id === id);
+  if (idx < 0) return;
+  const shot  = shots[idx];
+  const sec   = shot.section || 'Unsectioned';
+
+  /* Find all shots in the same section, sorted by their position in the main array */
+  const secIdxs = shots.reduce((acc, s, i) => { if ((s.section||'Unsectioned') === sec) acc.push(i); return acc; }, []);
+  const posInSec = secIdxs.indexOf(idx);
+  const targetPos = posInSec + dir;
+  if (targetPos < 0 || targetPos >= secIdxs.length) return;
+
+  /* Swap in the main array */
+  const targetIdx = secIdxs[targetPos];
+  shots.splice(idx, 1);
+  shots.splice(targetIdx < idx ? targetIdx : targetIdx - 1 + 1, 0, shot);
+  saveProjects();
+  goTo('checklist');
+}
+
+function moveSection(name, dir) {
+  if (!S.project) return;
+  const secs = S.project.sections;
+  const idx  = secs.indexOf(name);
+  if (idx < 0) return;
+  const swap = idx + dir;
+  if (swap < 0 || swap >= secs.length) return;
+  [secs[idx], secs[swap]] = [secs[swap], secs[idx]];
+  saveProjects();
+  goTo('checklist');
+}
+
+function renameSection(oldName, newName) {
+  if (!S.project || !newName || newName === oldName) return;
+  /* Update section array */
+  const si = S.project.sections.indexOf(oldName);
+  if (si >= 0) S.project.sections[si] = newName;
+  else S.project.sections.push(newName);
+  /* Update all shots in that section */
+  for (const s of S.project.shots) {
+    if ((s.section || 'Unsectioned') === oldName) s.section = newName;
+  }
+  saveProjects();
+  /* No full re-render needed unless name changed; just update section count badges */
+  updateProgress();
+}
+
+function addSectionAreaHtml() {
+  return `<button class="btn btn-ghost add-section-btn" onclick="showAddSectionForm()">＋ Add Section</button>`;
+}
+
+function showAddSectionForm() {
+  const area = document.getElementById('add-section-area');
+  if (!area) return;
+  area.innerHTML = `<div class="add-section-form">
+    <div class="form-group" style="margin-bottom:10px">
+      <label>New Section Name</label>
+      <input type="text" id="new-sec-name" placeholder="e.g. Behind the Scenes" maxlength="40" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary btn-sm" onclick="submitAddSection()">Add</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelAddSection()">Cancel</button>
+    </div>
+  </div>`;
+  document.getElementById('new-sec-name')?.focus();
+}
+
+function submitAddSection() {
+  const name = document.getElementById('new-sec-name')?.value.trim();
+  if (!name) { document.getElementById('new-sec-name')?.focus(); return; }
+  if (!S.project.sections.includes(name)) S.project.sections.push(name);
+  saveProjects();
+  goTo('checklist');
+}
+
+function cancelAddSection() {
+  const area = document.getElementById('add-section-area');
+  if (area) area.innerHTML = addSectionAreaHtml();
 }
 
 /* ──────────────────────────────────────────
@@ -1278,15 +1572,41 @@ function closeShotModal() {
 /* ──────────────────────────────────────────
    CUSTOM SHOT
 ────────────────────────────────────────── */
-function showCustomForm() {
+function showCustomForm(sectionName) {
   S.customFormOpen = true;
+  S.customSectionTarget = sectionName || null;
   const w = document.getElementById('custom-form-wrap');
   if (w) w.innerHTML = customFormHtml();
+  /* Bind type hint */
+  const sel = document.getElementById('c-type');
+  if (sel) sel.addEventListener('change', updateTypeHint);
 }
 
 function customFormHtml() {
+  const sections  = S.project?.sections || [];
+  const typeOpts  = Object.entries(SHOT_TYPES)
+    .map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+  const secOpts   = sections.map(s =>
+    `<option value="${esc(s)}" ${S.customSectionTarget === s ? 'selected' : ''}>${esc(s)}</option>`
+  ).join('');
+  const secField  = sections.length
+    ? `<div class="form-group">
+        <label>Section</label>
+        <select id="c-section">
+          ${secOpts}
+          <option value="__new__">＋ New section…</option>
+        </select>
+        <input type="text" id="c-section-new" placeholder="New section name" maxlength="40" autocomplete="off" style="display:none;margin-top:6px">
+       </div>`
+    : '';
   return `<div class="custom-form">
     <div class="custom-form-title">Add a Custom Shot</div>
+    <div class="form-group">
+      <label>Shot Type</label>
+      <select id="c-type">${typeOpts}</select>
+      <div class="type-hint" id="c-type-hint"></div>
+    </div>
+    ${secField}
     <div class="form-group">
       <label>Shot Title</label>
       <input type="text" id="c-title" placeholder="e.g. Close-up of my conference badge" maxlength="60" autocomplete="off">
@@ -1302,19 +1622,57 @@ function customFormHtml() {
   </div>`;
 }
 
+function updateTypeHint() {
+  const sel  = document.getElementById('c-type');
+  const hint = document.getElementById('c-type-hint');
+  if (!sel || !hint) return;
+  const t = SHOT_TYPES[sel.value];
+  if (t) { hint.textContent = t.what; hint.classList.add('visible'); }
+  else   { hint.classList.remove('visible'); }
+  /* Show/hide fps note */
+  const fps = sel.value === 'slow-mo' ? ' · Shoot at 60fps or 120fps in your camera app.' : '';
+  if (fps && t) hint.textContent = t.what + fps;
+}
+
 function submitCustomShot() {
-  const title = document.getElementById('c-title')?.value.trim();
-  const desc  = document.getElementById('c-desc')?.value.trim();
+  const title   = document.getElementById('c-title')?.value.trim();
+  const desc    = document.getElementById('c-desc')?.value.trim();
+  const typeVal = document.getElementById('c-type')?.value || 'custom';
   if (!title) { document.getElementById('c-title')?.focus(); return; }
-  const shot = { id: generateId(), type: 'custom', title, description: desc || 'Your custom shot.', duration: '3-5s', tip: 'Take your time and be creative.', app: null, fps: null, completed: false, custom: true };
+
+  /* Resolve section */
+  let section = S.customSectionTarget;
+  const secSel = document.getElementById('c-section');
+  if (secSel) {
+    if (secSel.value === '__new__') {
+      section = document.getElementById('c-section-new')?.value.trim() || 'Custom';
+      if (!S.project.sections.includes(section)) S.project.sections.push(section);
+    } else {
+      section = secSel.value;
+    }
+  }
+  if (!section && S.project?.sections?.length) section = S.project.sections[S.project.sections.length - 1];
+  if (!section) section = 'Custom';
+
+  const t    = SHOT_TYPES[typeVal] || SHOT_TYPES['custom'];
+  const shot = {
+    id: generateId(), type: typeVal, section,
+    title, description: desc || t.what,
+    duration: '3-5s', tip: t.what,
+    app:  (typeVal === 'hyperlapse' || typeVal === 'timelapse') ? 'Mimo' : null,
+    fps:  typeVal === 'slow-mo' ? '60' : null,
+    completed: false, custom: true,
+  };
   S.project.shots.push(shot);
   saveProjects();
   S.customFormOpen = false;
+  S.customSectionTarget = null;
   goTo('checklist');
 }
 
 function cancelCustomShot() {
   S.customFormOpen = false;
+  S.customSectionTarget = null;
   const w = document.getElementById('custom-form-wrap');
   if (w) w.innerHTML = `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Custom Shot</button>`;
 }
@@ -1413,11 +1771,180 @@ function renderHome() {
   return `<p class="section-title">Your Projects</p>
     <div class="project-list">${cards}</div>
     <div class="home-actions">
-      <button class="btn btn-primary btn-large" onclick="startNew()">＋ New Project</button>
+      <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
+      <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
     </div>`;
 }
 
+/* ──────────────────────────────────────────
+   SCREEN: ADVANCED SHOT BUILDER
+────────────────────────────────────────── */
+function startBuilder() {
+  S.builderSections = [{ name: 'Section 1', shots: [] }];
+  S.builderName     = 'Custom-' + new Date().toISOString().slice(0,10);
+  S.builderAddingTo = null;
+  goTo('builder');
+}
+
+function renderBuilder() {
+  const typeOpts = Object.entries(SHOT_TYPES)
+    .map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+
+  const sectionsHtml = S.builderSections.map((sec, si) => {
+    const isFirst = si === 0;
+    const isLast  = si === S.builderSections.length - 1;
+    const shotsHtml = sec.shots.map((shot, idx) => {
+      const t = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
+      return `<div class="builder-shot-row">
+        <span class="builder-shot-type">${t.icon} ${t.label}</span>
+        <span class="builder-shot-title" title="${esc(shot.title)}">${esc(shot.title)}</span>
+        <div class="sort-btns">
+          ${idx > 0              ? `<button class="sort-btn" onclick="builderMoveShot(${si},${idx},-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
+          ${idx < sec.shots.length-1 ? `<button class="sort-btn" onclick="builderMoveShot(${si},${idx}, 1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
+        </div>
+        <button class="builder-shot-del" title="Remove" onclick="builderDeleteShot(${si},${idx})">✕</button>
+      </div>`;
+    }).join('');
+
+    const addFormHtml = S.builderAddingTo === si
+      ? `<div class="builder-shot-form">
+          <div class="form-group" style="margin-bottom:8px">
+            <select id="bld-type-${si}">${typeOpts}</select>
+            <div class="type-hint" id="bld-hint-${si}"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <input type="text" id="bld-title-${si}" placeholder="Shot title…" maxlength="60" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <button class="btn btn-primary btn-sm" onclick="builderAddShot(${si})">Add Shot</button>
+            <button class="btn btn-ghost btn-sm" onclick="S.builderAddingTo=null;render()">Cancel</button>
+          </div>
+         </div>`
+      : `<button class="btn btn-ghost builder-add-shot-btn" onclick="S.builderAddingTo=${si};render()">＋ Add Shot</button>`;
+
+    return `<div class="builder-section">
+      <div class="builder-section-hdr">
+        <span class="builder-section-name" contenteditable="true" role="textbox"
+              onblur="builderRenameSection(${si},this.textContent.trim())"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+              >${esc(sec.name)}</span>
+        <div class="sort-btns">
+          ${!isFirst ? `<button class="sort-btn" onclick="builderMoveSection(${si},-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
+          ${!isLast  ? `<button class="sort-btn" onclick="builderMoveSection(${si}, 1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
+        </div>
+        <button class="builder-shot-del" title="Delete section" onclick="builderDeleteSection(${si})">✕</button>
+      </div>
+      <div class="builder-section-body">
+        ${shotsHtml || `<p style="color:var(--muted);font-size:13px;padding:4px 0 8px">No shots yet — add one below.</p>`}
+        ${addFormHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="screen-title">Advanced Shot Builder</div>
+  <p class="builder-intro">Build your shot list manually — section by section, shot by shot. Great for custom shoots where you already know exactly what you want to capture.</p>
+
+  <div class="form-group">
+    <label>Project Name</label>
+    <input type="text" id="bld-proj-name" value="${esc(S.builderName)}" maxlength="60" autocomplete="off"
+           oninput="S.builderName=this.value.trim()">
+  </div>
+
+  ${sectionsHtml}
+
+  <button class="btn btn-ghost add-section-btn" onclick="builderAddSection()">＋ Add Section</button>
+
+  <div class="builder-actions">
+    <button class="btn btn-primary btn-large" onclick="builderSave()">💾 Save Project</button>
+  </div>`;
+}
+
+function builderRenameSection(si, name) {
+  if (name && S.builderSections[si]) S.builderSections[si].name = name;
+}
+
+function builderDeleteSection(si) {
+  if (S.builderSections.length === 1) { showBanner('You need at least one section.', 'danger'); return; }
+  S.builderSections.splice(si, 1);
+  if (S.builderAddingTo === si) S.builderAddingTo = null;
+  render();
+}
+
+function builderAddSection() {
+  S.builderSections.push({ name: 'New Section', shots: [] });
+  render();
+}
+
+function builderMoveSection(si, dir) {
+  const swap = si + dir;
+  if (swap < 0 || swap >= S.builderSections.length) return;
+  [S.builderSections[si], S.builderSections[swap]] = [S.builderSections[swap], S.builderSections[si]];
+  render();
+}
+
+function builderAddShot(si) {
+  const typeEl  = document.getElementById(`bld-type-${si}`);
+  const titleEl = document.getElementById(`bld-title-${si}`);
+  const title   = titleEl?.value.trim();
+  const typeVal = typeEl?.value || 'custom';
+  if (!title) { titleEl?.focus(); return; }
+  const t = SHOT_TYPES[typeVal] || SHOT_TYPES['custom'];
+  S.builderSections[si].shots.push({
+    id: generateId(), type: typeVal, title,
+    description: t.what, duration: '3-5s', tip: t.what,
+    app:  (typeVal === 'hyperlapse' || typeVal === 'timelapse') ? 'Mimo' : null,
+    fps:  typeVal === 'slow-mo' ? '60' : null,
+    completed: false, custom: true,
+  });
+  S.builderAddingTo = null;
+  render();
+}
+
+function builderMoveShot(si, idx, dir) {
+  const shots = S.builderSections[si].shots;
+  const swap  = idx + dir;
+  if (swap < 0 || swap >= shots.length) return;
+  [shots[idx], shots[swap]] = [shots[swap], shots[idx]];
+  render();
+}
+
+function builderDeleteShot(si, idx) {
+  S.builderSections[si].shots.splice(idx, 1);
+  render();
+}
+
+function builderSave() {
+  const nameEl = document.getElementById('bld-proj-name');
+  const name   = (nameEl?.value.trim() || S.builderName || 'Custom-' + new Date().toISOString().slice(0,10)).slice(0,60);
+
+  const allShots = [];
+  const sections = [];
+  for (const sec of S.builderSections) {
+    if (!sections.includes(sec.name)) sections.push(sec.name);
+    for (const s of sec.shots) {
+      allShots.push({ ...s, section: sec.name });
+    }
+  }
+
+  if (!allShots.length) { showBanner('Add at least one shot before saving.', 'danger'); return; }
+
+  const project = {
+    id:        generateId(),
+    name,
+    createdAt: new Date().toISOString(),
+    event:     '',
+    topic:     name,
+    duration:  0,
+    skillLevel: 1,
+    shots:     allShots,
+    sections,
+  };
+  S.projects.unshift(project);
+  S.project = project;
+  saveProjects();
+  goTo('checklist');
+}
 
 /* ──────────────────────────────────────────
    SCREEN: NEW PROJECT
@@ -1505,14 +2032,38 @@ function validateAndGenerate() {
 ────────────────────────────────────────── */
 function renderChecklist() {
   if (!S.project) return `<p style="color:var(--muted);padding:40px 0;text-align:center">No project loaded. <button class="btn btn-ghost btn-sm" onclick="goTo('home')">Go Home</button></p>`;
-  const shots = S.project.shots || [];
+  ensureSections(S.project);
   const done  = countDone();
-  const total = shots.length;
+  const total = S.project.shots.length;
   const pct   = total ? Math.round((done/total)*100) : 0;
+
+  const { sections, map } = shotsBySection(S.project);
+
+  const sectionHtml = sections.map((sec, si) => {
+    const shots    = map[sec] || [];
+    const secDone  = shots.filter(s => s.completed).length;
+    const isLast   = si === sections.length - 1;
+    const isFirst  = si === 0;
+    return `<div class="shot-section" data-section="${esc(sec)}">
+      <div class="shot-section-hdr">
+        <span class="shot-section-hdr-title" contenteditable="true" role="textbox"
+              onblur="renameSection('${esc(sec)}', this.textContent.trim())"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+              >${esc(sec)}</span>
+        <span class="section-shot-count">${secDone}/${shots.length}</span>
+        <div class="sort-btns">
+          ${!isFirst ? `<button class="sort-btn" title="Move section up" onclick="moveSection('${esc(sec)}',-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
+          ${!isLast  ? `<button class="sort-btn" title="Move section down" onclick="moveSection('${esc(sec)}',1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
+        </div>
+      </div>
+      ${shots.map((s, idx) => shotCardHtml(s, idx, shots.length)).join('')}
+      <button class="btn btn-ghost add-custom-btn" style="margin-top:6px;font-size:12px;padding:6px" onclick="showCustomForm('${esc(sec)}')">＋ Add Shot to this Section</button>
+    </div>`;
+  }).join('');
 
   const customSection = S.customFormOpen
     ? customFormHtml()
-    : `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Custom Shot</button>`;
+    : `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Shot</button>`;
 
   return `<div class="checklist-hdr">
     <span class="proj-title-edit" contenteditable="true" role="textbox"
@@ -1525,8 +2076,10 @@ function renderChecklist() {
   <div class="tip-banner">💡 Hold each shot for at least <strong>3–5 seconds</strong> before moving — editors need the breathing room!</div>
 
   <div class="shot-list" id="shot-list">
-    ${shots.map(s => shotCardHtml(s)).join('')}
+    ${sectionHtml}
   </div>
+
+  <div id="add-section-area">${addSectionAreaHtml()}</div>
 
   <div class="custom-form-wrap" id="custom-form-wrap">${customSection}</div>
 
@@ -1538,11 +2091,17 @@ function renderChecklist() {
   </div>`;
 }
 
-function shotCardHtml(shot) {
+function shotCardHtml(shot, idx, total) {
   const type    = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
   const fps     = shot.fps  ? `<span class="fps-badge-sm">${shot.fps}fps</span>` : '';
   const mimo    = shot.app === 'Mimo' ? `<span class="mimo-badge-sm">Mimo</span>` : '';
+  const canUp   = idx > 0;
+  const canDown = idx < total - 1;
   return `<div class="shot-card ${shot.completed ? 'done' : ''}" data-shot-id="${shot.id}" onclick="toggleShot('${shot.id}')">
+    <div class="sort-btns" onclick="event.stopPropagation()">
+      ${canUp   ? `<button class="sort-btn" title="Move up"   onclick="moveShot('${shot.id}',-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
+      ${canDown ? `<button class="sort-btn" title="Move down" onclick="moveShot('${shot.id}', 1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
+    </div>
     <div class="check-circle">${shot.completed ? '✓' : ''}</div>
     <div class="shot-info">
       <div class="shot-type-badge">${type.icon} ${type.label}${fps}${mimo}</div>
