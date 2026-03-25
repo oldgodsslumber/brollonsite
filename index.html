@@ -816,9 +816,6 @@ const S = {
   },
   project:          null,
   projects:         [],
-  apiKey:           '',
-  proxyToken:       '',
-  proxyUrl:         '',
   lensProfile:      null,
   modalShotId:      null,
   customFormOpen:   false,
@@ -835,18 +832,6 @@ function saveProjects() {
 }
 function loadProjects() {
   try { S.projects = JSON.parse(localStorage.getItem('broll_projects') || '[]'); } catch { S.projects = []; }
-}
-function saveApiKey(k) { S.apiKey = (k||'').trim(); localStorage.setItem('broll_apikey', S.apiKey); }
-function loadApiKey()  { S.apiKey = localStorage.getItem('broll_apikey') || ''; }
-function saveProxyCfg(url, token) {
-  S.proxyUrl   = (url||'').trim();
-  S.proxyToken = (token||'').trim();
-  localStorage.setItem('broll_proxy_url',   S.proxyUrl);
-  localStorage.setItem('broll_proxy_token', S.proxyToken);
-}
-function loadProxyCfg() {
-  S.proxyUrl   = localStorage.getItem('broll_proxy_url')   || '';
-  S.proxyToken = localStorage.getItem('broll_proxy_token') || '';
 }
 
 /* ──────────────────────────────────────────
@@ -886,7 +871,6 @@ function render() {
   if (S.screen === 'loading') { renderLoading(el); return; }
   const screens = {
     home:      renderHome,
-    settings:  renderSettings,
     new:       renderNew,
     checklist: renderChecklist,
   };
@@ -898,14 +882,12 @@ function updateHeader() {
   const h = document.getElementById('app-header');
   if (!h) return;
   const showBack     = S.screen !== 'home';
-  const showSettings = S.screen === 'home';
-  const showSave     = S.screen === 'checklist' && S.project;
-  const titles = { home:'<span class="blue">B-Roll</span> Planner', settings:'Settings', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List') };
+  const showSave = S.screen === 'checklist' && S.project;
+  const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List') };
   h.innerHTML = `<div class="hdr-inner">
     ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
     <div class="hdr-title">${titles[S.screen]||'B-Roll Planner'}</div>
     ${showSave ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
-    ${showSettings ? `<button class="hdr-btn" onclick="goTo('settings')" title="Settings">⚙</button>` : ''}
   </div>`;
 }
 
@@ -1071,12 +1053,6 @@ Suggested projectName format: "${eventName.split(',')[0].trim().replace(/\s+/g,'
 }
 
 async function callClaude(newDir) {
-  const useProxy = !!(S.proxyUrl && S.proxyToken);
-  if (!useProxy && !S.apiKey) {
-    showBanner('Please configure your API key or proxy token in Settings.', 'danger');
-    goTo('settings');
-    return;
-  }
   if (!navigator.onLine) { showBanner('You appear to be offline. Connect to the internet and try again.', 'danger'); return; }
 
   goTo('loading');
@@ -1088,26 +1064,19 @@ async function callClaude(newDir) {
     messages: [{ role: 'user', content: buildUserMessage(newDir) }],
   };
 
-  /* Proxy mode: call /api/claude with x-proxy-token.
-     Direct mode: call Anthropic directly with x-api-key (needs the dangerous-direct-browser-access header). */
-  const fetchUrl  = useProxy
-    ? S.proxyUrl
-    : 'https://api.anthropic.com/v1/messages';
-  const fetchHdrs = useProxy
-    ? { 'Content-Type': 'application/json', 'x-proxy-token': S.proxyToken }
-    : { 'Content-Type': 'application/json', 'x-api-key': S.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+  const fetchHdrs = { 'Content-Type': 'application/json' };
 
   let attempt = 0;
   while (attempt < 2) {
     attempt++;
     try {
-      const res = await fetch(fetchUrl, {
+      const res = await fetch('/api/claude', {
         method: 'POST',
         headers: fetchHdrs,
         body: JSON.stringify(payload),
       });
 
-      if (res.status === 401) { showBanner(useProxy ? 'Invalid proxy token — please check Settings.' : 'Invalid API key — please check Settings.', 'danger'); goTo('settings'); return; }
+      if (res.status === 401) { showBanner('API not configured — contact your admin.', 'danger'); goTo('home'); return; }
       if (!res.ok) {
         const err = await res.json().catch(()=>({}));
         throw new Error(err.error?.message || 'HTTP ' + res.status);
@@ -1449,66 +1418,6 @@ function renderHome() {
     </div>`;
 }
 
-/* ──────────────────────────────────────────
-   SCREEN: SETTINGS
-────────────────────────────────────────── */
-function renderSettings() {
-  return `<div>
-    <div class="screen-title">Settings</div>
-
-    <div style="background:rgba(0,71,187,0.08);border:1px solid rgba(0,71,187,0.25);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:24px;font-size:13px;line-height:1.6;color:var(--muted)">
-      <strong style="color:var(--text)">Team setup (recommended)</strong><br>
-      If your admin has set up the shared proxy, enter the proxy URL and token below. Your Anthropic API key stays safely on the server — you never need to handle it.
-    </div>
-
-    <div class="form-group">
-      <label>Proxy URL</label>
-      <input type="text" id="proxy-url-input" placeholder="/api/claude" value="${esc(S.proxyUrl)}" autocomplete="off">
-      <div class="form-hint">Leave as <code>/api/claude</code> if the app is hosted on Vercel. Ask your admin if unsure.</div>
-    </div>
-
-    <div class="form-group">
-      <label>Proxy Token</label>
-      <input type="password" id="proxy-token-input" placeholder="Shared secret from your admin" value="${esc(S.proxyToken)}" autocomplete="off">
-      <div class="form-hint">The shared password your admin distributes to the team. Stored only in this browser.</div>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:12px;margin:20px 0 20px;color:var(--muted);font-size:13px">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      or, for personal use only
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>
-
-    <div class="form-group">
-      <label>Your own Claude API Key</label>
-      <input type="password" id="api-key-input" placeholder="sk-ant-api03-…" value="${esc(S.apiKey)}" autocomplete="off">
-      <div class="form-hint">Calls Anthropic directly from your browser. The proxy token above takes priority if both are set.</div>
-    </div>
-
-    <button class="btn btn-primary btn-full" onclick="saveSettings()">Save &amp; Continue</button>
-    <a class="api-key-link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get your own Claude API key →</a>
-  </div>`;
-}
-
-function saveSettings() {
-  const proxyUrl   = document.getElementById('proxy-url-input')?.value?.trim();
-  const proxyToken = document.getElementById('proxy-token-input')?.value?.trim();
-  const apiKey     = document.getElementById('api-key-input')?.value?.trim();
-
-  const hasProxy  = !!(proxyUrl && proxyToken);
-  const hasDirect = !!apiKey;
-
-  if (!hasProxy && !hasDirect) {
-    showBanner('Enter either a proxy token or your own API key.', 'danger');
-    return;
-  }
-
-  if (hasProxy || proxyUrl || proxyToken) saveProxyCfg(proxyUrl || '/api/claude', proxyToken || '');
-  if (apiKey) saveApiKey(apiKey);
-
-  showBanner('Settings saved!', 'success');
-  goTo('home');
-}
 
 /* ──────────────────────────────────────────
    SCREEN: NEW PROJECT
@@ -1757,10 +1666,7 @@ function animCustom(s) {
 ────────────────────────────────────────── */
 (function init() {
   loadProjects();
-  loadApiKey();
-  loadProxyCfg();
-  const configured = S.apiKey || (S.proxyToken && S.proxyUrl);
-  S.screen = configured ? 'home' : 'settings';
+  S.screen = 'home';
   render();
 })();
 </script>

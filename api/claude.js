@@ -15,12 +15,6 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')   return res.status(405).json({ error: { message: 'Method not allowed' } });
 
-  /* ── Token check ── */
-  const expected = process.env.PROXY_TOKEN || '';
-  const received = req.headers['x-proxy-token'] || '';
-  if (!expected)          return res.status(500).json({ error: { message: 'Proxy not configured — set PROXY_TOKEN in Vercel.' } });
-  if (received !== expected) return res.status(401).json({ error: { type: 'authentication_error', message: 'Invalid proxy token.' } });
-
   /* ── API key check ── */
   const apiKey = process.env.ANTHROPIC_API_KEY || '';
   if (!apiKey) return res.status(500).json({ error: { message: 'Proxy not configured — set ANTHROPIC_API_KEY in Vercel.' } });
