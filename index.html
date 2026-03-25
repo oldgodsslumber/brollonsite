@@ -785,7 +785,7 @@ input[type=range]::-moz-range-thumb {
   margin-top: 8px;
 }
 
-/* ── SORT BUTTONS ── */
+/* ── SORT BUTTONS (builder screen only) ── */
 .sort-btn {
   background: none;
   border: none;
@@ -804,6 +804,62 @@ input[type=range]::-moz-range-thumb {
 }
 .sort-btn:hover { color: var(--muted); background: var(--surf2); }
 .sort-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+
+/* ── DRAG HANDLES (checklist reorder mode) ── */
+.drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 22px;
+  min-width: 36px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0.6;
+  transition: opacity .15s;
+}
+.drag-handle:hover, .drag-handle:active { opacity: 1; cursor: grabbing; }
+.shot-card.dragging { opacity: 0.22; }
+.shot-card.drag-over-before { border-top: 3px solid var(--accent) !important; }
+.shot-card.drag-over-after  { border-bottom: 3px solid var(--accent) !important; }
+.shot-section.drag-over-section > .shot-section-hdr {
+  background: rgba(0,71,187,0.12);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.reorder-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,71,187,0.1);
+  border: 1px solid rgba(0,71,187,0.3);
+  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.section-drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 18px;
+  min-width: 30px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0.5;
+  transition: opacity .15s;
+}
+.section-drag-handle:hover { opacity: 1; }
 
 /* ── TYPE HINT ── */
 .type-hint {
@@ -956,6 +1012,7 @@ const S = {
   projects:         [],
   lensProfile:      null,
   modalShotId:      null,
+  reorderMode:      false,
   customFormOpen:   false,
   customSectionTarget: null,  /* which section "Add Shot" was clicked from */
   newDirOpen:       false,
@@ -1052,24 +1109,27 @@ function render() {
   };
   el.innerHTML = (screens[S.screen] || renderHome)();
   bindEvents();
+  if (S.reorderMode && S.screen === 'checklist') bindDragHandles();
 }
 
 function updateHeader() {
   const h = document.getElementById('app-header');
   if (!h) return;
   const showBack     = S.screen !== 'home';
-  const showSave = S.screen === 'checklist' && S.project;
+  const isChecklist = S.screen === 'checklist' && S.project;
   const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder' };
   h.innerHTML = `<div class="hdr-inner">
     ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
     <div class="hdr-title">${titles[S.screen]||'B-Roll Planner'}</div>
-    ${showSave ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
+    ${isChecklist ? `<button class="hdr-btn" onclick="toggleReorderMode()" title="${S.reorderMode ? 'Done reordering' : 'Edit shot order'}" style="${S.reorderMode ? 'color:var(--accent)' : ''}">${S.reorderMode ? 'Done' : '⠿'}</button>` : ''}
+    ${isChecklist && !S.reorderMode ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
   </div>`;
 }
 
 function goBack() {
   S.customFormOpen = false;
   S.newDirOpen = false;
+  S.reorderMode = false;
   goTo('home');
 }
 
@@ -1381,7 +1441,7 @@ function onFileLoad(input) {
    SHOT OPERATIONS
 ────────────────────────────────────────── */
 function toggleShot(id) {
-  if (!S.project) return;
+  if (!S.project || S.reorderMode || DS.active) return;
   const shot = S.project.shots.find(s => s.id === id);
   if (!shot) return;
   shot.completed = !shot.completed;
@@ -1523,9 +1583,191 @@ function cancelAddSection() {
 }
 
 /* ──────────────────────────────────────────
+   REORDER MODE & DRAG-AND-DROP
+────────────────────────────────────────── */
+function toggleReorderMode() {
+  S.reorderMode = !S.reorderMode;
+  if (S.reorderMode) {
+    S.customFormOpen = false;
+    S.newDirOpen = false;
+  }
+  goTo('checklist');
+  if (S.reorderMode) bindDragHandles();
+}
+
+/* ── Pointer drag state ── */
+const DS = {
+  active:    false,
+  type:      null,   /* 'shot' | 'section' */
+  id:        null,
+  ghost:     null,
+  originEl:  null,
+  offsetX:   0,
+  offsetY:   0,
+  lastOver:  null,   /* last highlighted element */
+};
+
+function bindDragHandles() {
+  /* Shot handles */
+  document.querySelectorAll('[data-drag-shot]').forEach(handle => {
+    handle.addEventListener('pointerdown', e => startDrag(e, 'shot', handle.dataset.dragShot));
+  });
+  /* Section handles */
+  document.querySelectorAll('[data-drag-section]').forEach(handle => {
+    handle.addEventListener('pointerdown', e => startDrag(e, 'section', handle.dataset.dragSection));
+  });
+}
+
+function startDrag(e, type, id) {
+  e.preventDefault();
+  e.stopPropagation();
+  const originEl = type === 'shot'
+    ? document.querySelector(`[data-shot-id="${id}"]`)
+    : document.querySelector(`[data-section="${id}"]`);
+  if (!originEl) return;
+
+  const rect   = originEl.getBoundingClientRect();
+  const ghost  = originEl.cloneNode(true);
+  ghost.className += ' drag-ghost';
+  ghost.style.cssText += `;position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;margin:0`;
+  document.body.appendChild(ghost);
+  originEl.classList.add('dragging');
+
+  Object.assign(DS, {
+    active: true, type, id,
+    ghost, originEl,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    lastOver: null,
+  });
+
+  document.addEventListener('pointermove', onDragMove, { passive: false });
+  document.addEventListener('pointerup',   onDragEnd);
+  document.addEventListener('pointercancel', onDragEnd);
+}
+
+function onDragMove(e) {
+  if (!DS.active) return;
+  e.preventDefault();
+  DS.ghost.style.top  = (e.clientY - DS.offsetY) + 'px';
+  DS.ghost.style.left = (e.clientX - DS.offsetX) + 'px';
+
+  /* Clear previous highlight */
+  DS.lastOver?.classList.remove('drag-over-before','drag-over-after','drag-over-section');
+
+  DS.ghost.style.pointerEvents = 'none';
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  DS.ghost.style.pointerEvents = '';
+
+  if (DS.type === 'shot') {
+    const card = under?.closest('[data-shot-id]');
+    if (card && card !== DS.originEl) {
+      const r   = card.getBoundingClientRect();
+      const cls = e.clientY < r.top + r.height / 2 ? 'drag-over-before' : 'drag-over-after';
+      card.classList.add(cls);
+      DS.lastOver = card;
+    } else {
+      /* Highlight entire section drop zone */
+      const sec = under?.closest('[data-section]');
+      if (sec && !sec.contains(DS.originEl)) {
+        sec.classList.add('drag-over-section');
+        DS.lastOver = sec;
+      }
+    }
+  } else {
+    const sec = under?.closest('[data-section]');
+    if (sec && sec !== DS.originEl) {
+      sec.classList.add('drag-over-section');
+      DS.lastOver = sec;
+    }
+  }
+}
+
+function onDragEnd(e) {
+  if (!DS.active) return;
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup',   onDragEnd);
+  document.removeEventListener('pointercancel', onDragEnd);
+
+  DS.ghost?.remove();
+  DS.originEl?.classList.remove('dragging');
+  DS.lastOver?.classList.remove('drag-over-before','drag-over-after','drag-over-section');
+
+  /* Compute drop */
+  DS.ghost && (DS.ghost.style.pointerEvents = 'none');
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+
+  if (DS.type === 'shot') {
+    const card = under?.closest('[data-shot-id]');
+    if (card && card !== DS.originEl) {
+      const r      = card.getBoundingClientRect();
+      const after  = e.clientY >= r.top + r.height / 2;
+      dropShot(DS.id, card.dataset.shotId, after);
+    } else {
+      const sec = under?.closest('[data-section]');
+      if (sec) dropShotToSection(DS.id, sec.dataset.section);
+    }
+  } else {
+    const sec = under?.closest('[data-section]');
+    if (sec && sec.dataset.section !== DS.id) dropSection(DS.id, sec.dataset.section);
+  }
+
+  Object.assign(DS, { active:false, type:null, id:null, ghost:null, originEl:null, lastOver:null });
+}
+
+function dropShot(shotId, targetShotId, insertAfter) {
+  if (!S.project) return;
+  const shots     = S.project.shots;
+  const fromIdx   = shots.findIndex(s => s.id === shotId);
+  const toIdx     = shots.findIndex(s => s.id === targetShotId);
+  if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+
+  const shot      = shots[fromIdx];
+  shot.section    = shots[toIdx].section; /* inherit target section */
+  shots.splice(fromIdx, 1);
+  const newTo     = shots.findIndex(s => s.id === targetShotId);
+  shots.splice(insertAfter ? newTo + 1 : newTo, 0, shot);
+  saveProjects();
+  goTo('checklist');
+  bindDragHandles();
+}
+
+function dropShotToSection(shotId, sectionName) {
+  if (!S.project) return;
+  const shots   = S.project.shots;
+  const fromIdx = shots.findIndex(s => s.id === shotId);
+  if (fromIdx < 0) return;
+  const shot    = shots.splice(fromIdx, 1)[0];
+  shot.section  = sectionName;
+  /* Insert after last shot of that section */
+  let ins = shots.length;
+  for (let i = shots.length - 1; i >= 0; i--) {
+    if ((shots[i].section||'Unsectioned') === sectionName) { ins = i + 1; break; }
+  }
+  shots.splice(ins, 0, shot);
+  saveProjects();
+  goTo('checklist');
+  bindDragHandles();
+}
+
+function dropSection(fromName, beforeName) {
+  if (!S.project) return;
+  const secs    = S.project.sections;
+  const fromIdx = secs.indexOf(fromName);
+  if (fromIdx < 0) return;
+  secs.splice(fromIdx, 1);
+  const toIdx   = secs.indexOf(beforeName);
+  secs.splice(toIdx >= 0 ? toIdx : secs.length, 0, fromName);
+  saveProjects();
+  goTo('checklist');
+  bindDragHandles();
+}
+
+/* ──────────────────────────────────────────
    MODAL
 ────────────────────────────────────────── */
 function openShotModal(id) {
+  if (S.reorderMode) return;
   S.modalShotId = id;
   const shot = S.project?.shots.find(s => s.id === id);
   if (!shot) return;
@@ -2044,20 +2286,23 @@ function renderChecklist() {
     const secDone  = shots.filter(s => s.completed).length;
     const isLast   = si === sections.length - 1;
     const isFirst  = si === 0;
+    const secHandle = S.reorderMode
+      ? `<span class="section-drag-handle" data-drag-section="${esc(sec)}" title="Drag to reorder section">⠿</span>`
+      : '';
+    const addShotBtn = S.reorderMode
+      ? ''
+      : `<button class="btn btn-ghost add-custom-btn" style="margin-top:6px;font-size:12px;padding:6px" onclick="showCustomForm('${esc(sec)}')">＋ Add Shot to this Section</button>`;
     return `<div class="shot-section" data-section="${esc(sec)}">
       <div class="shot-section-hdr">
-        <span class="shot-section-hdr-title" contenteditable="true" role="textbox"
+        ${secHandle}
+        <span class="shot-section-hdr-title" contenteditable="${S.reorderMode ? 'false' : 'true'}" role="textbox"
               onblur="renameSection('${esc(sec)}', this.textContent.trim())"
               onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
               >${esc(sec)}</span>
         <span class="section-shot-count">${secDone}/${shots.length}</span>
-        <div class="sort-btns">
-          ${!isFirst ? `<button class="sort-btn" title="Move section up" onclick="moveSection('${esc(sec)}',-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
-          ${!isLast  ? `<button class="sort-btn" title="Move section down" onclick="moveSection('${esc(sec)}',1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
-        </div>
       </div>
-      ${shots.map((s, idx) => shotCardHtml(s, idx, shots.length)).join('')}
-      <button class="btn btn-ghost add-custom-btn" style="margin-top:6px;font-size:12px;padding:6px" onclick="showCustomForm('${esc(sec)}')">＋ Add Shot to this Section</button>
+      ${shots.map(s => shotCardHtml(s)).join('')}
+      ${addShotBtn}
     </div>`;
   }).join('');
 
@@ -2073,17 +2318,20 @@ function renderChecklist() {
     <div class="progress-track"><div id="progress-fill" class="progress-fill" style="width:${pct}%"></div></div>
   </div>
 
-  <div class="tip-banner">💡 Hold each shot for at least <strong>3–5 seconds</strong> before moving — editors need the breathing room!</div>
+  ${S.reorderMode
+    ? `<div class="reorder-banner">⠿ Drag shots or section headers to reorder — tap <strong>Done</strong> when finished</div>`
+    : `<div class="tip-banner">💡 Hold each shot for at least <strong>3–5 seconds</strong> before moving — editors need the breathing room!</div>`
+  }
 
   <div class="shot-list" id="shot-list">
     ${sectionHtml}
   </div>
 
-  <div id="add-section-area">${addSectionAreaHtml()}</div>
+  ${S.reorderMode ? '' : `<div id="add-section-area">${addSectionAreaHtml()}</div>`}
 
-  <div class="custom-form-wrap" id="custom-form-wrap">${customSection}</div>
+  ${S.reorderMode ? '' : `<div class="custom-form-wrap" id="custom-form-wrap">${customSection}</div>`}
 
-  <div class="new-dir-wrap" id="new-dir-panel">${newDirHtml()}</div>
+  ${S.reorderMode ? '' : `<div class="new-dir-wrap" id="new-dir-panel">${newDirHtml()}</div>`}
 
   <div class="checklist-footer">
     <button class="btn btn-ghost" onclick="downloadProject(S.project.id)">↓ Save as JSON</button>
@@ -2091,23 +2339,24 @@ function renderChecklist() {
   </div>`;
 }
 
-function shotCardHtml(shot, idx, total) {
-  const type    = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
-  const fps     = shot.fps  ? `<span class="fps-badge-sm">${shot.fps}fps</span>` : '';
-  const mimo    = shot.app === 'Mimo' ? `<span class="mimo-badge-sm">Mimo</span>` : '';
-  const canUp   = idx > 0;
-  const canDown = idx < total - 1;
+function shotCardHtml(shot) {
+  const type  = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
+  const fps   = shot.fps  ? `<span class="fps-badge-sm">${shot.fps}fps</span>` : '';
+  const mimo  = shot.app === 'Mimo' ? `<span class="mimo-badge-sm">Mimo</span>` : '';
+  const handle = S.reorderMode
+    ? `<span class="drag-handle" data-drag-shot="${shot.id}" title="Drag to reorder">⠿</span>`
+    : '';
+  const info = S.reorderMode
+    ? `<button class="shot-expand" style="opacity:0;pointer-events:none">ⓘ</button>`
+    : `<button class="shot-expand" title="Learn more about this shot" onclick="event.stopPropagation();openShotModal('${shot.id}')">ⓘ</button>`;
   return `<div class="shot-card ${shot.completed ? 'done' : ''}" data-shot-id="${shot.id}" onclick="toggleShot('${shot.id}')">
-    <div class="sort-btns" onclick="event.stopPropagation()">
-      ${canUp   ? `<button class="sort-btn" title="Move up"   onclick="moveShot('${shot.id}',-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
-      ${canDown ? `<button class="sort-btn" title="Move down" onclick="moveShot('${shot.id}', 1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
-    </div>
+    ${handle}
     <div class="check-circle">${shot.completed ? '✓' : ''}</div>
     <div class="shot-info">
       <div class="shot-type-badge">${type.icon} ${type.label}${fps}${mimo}</div>
       <div class="shot-title">${esc(shot.title)}</div>
     </div>
-    <button class="shot-expand" title="Learn more about this shot" onclick="event.stopPropagation();openShotModal('${shot.id}')">ⓘ</button>
+    ${info}
   </div>`;
 }
 
