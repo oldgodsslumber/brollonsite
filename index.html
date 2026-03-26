@@ -1297,9 +1297,6 @@ function buildUserMessage(newDir) {
   const lens  = lensPromptHint();
   const shotCount = Math.round(duration / 4);
 
-  if (newDir) {
-    const done   = S.project.shots.filter(s => s.completed);
-    const undone = S.project.shots.filter(s => !s.completed);
   const fullEvent = eventLocation ? `${eventName} in ${eventLocation}` : eventName;
 
   if (newDir) {
