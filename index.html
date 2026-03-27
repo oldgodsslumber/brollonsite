@@ -1070,6 +1070,17 @@ input[type=range]::-moz-range-thumb {
 .shot-section[data-section="Go Further"] .shot-section-hdr-title  { color: #60a5fa; }
 .shot-section[data-section="Your Shots"] .shot-section-hdr-title  { color: #c084fc; }
 
+/* ── New video tabs ── */
+.tab-group { display:flex; gap:0; margin-bottom:20px; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border); }
+.tab-btn { flex:1; padding:12px 8px; background:var(--surf2); border:none; color:var(--muted); font-size:14px; font-weight:500; cursor:pointer; transition:background .15s,color .15s; text-align:center; line-height:1.3; }
+.tab-btn.active { background:rgba(0,71,187,0.2); color:var(--text); font-weight:600; }
+.tab-btn:hover:not(.active) { background:var(--surf3); color:var(--text); }
+
+/* ── Camera field ── */
+.camera-field-wrap { display:flex; gap:8px; align-items:center; }
+.camera-field-wrap input { flex:1; }
+.camera-detect-btn { flex-shrink:0; white-space:nowrap; padding:10px 12px; font-size:13px; }
+
 /* ── Stretch pill ── */
 .stretch-pill { display:inline-block; background:rgba(245,158,11,0.18); color:#f59e0b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:4px; padding:1px 5px; margin-left:5px; vertical-align:middle; }
 
@@ -1979,19 +1990,41 @@ function lensHtml() {
 }
 
 function lensPromptHint() {
-  const d = lensDesc();
-  if (!d) return '';
+  const manual = (S.form?.camera || '').trim();
   const lines = [];
-  if (S.lensProfile.ultrawide) lines.push('ultrawide lens (great for wide establishing shots and architecture sweeps)');
-  if (S.lensProfile.telephoto) lines.push('telephoto/zoom lens (great for compressed close-ups and speaker shots)');
-  if (S.lensProfile.cinematic) lines.push('cinematic/portrait mode (great for shallow depth-of-field people shots)');
-  return lines.length ? '\nThis user\'s phone has: ' + lines.join(', ') + '. Include shots that leverage these lenses.' : '';
+  if (S.lensProfile?.ultrawide) lines.push('ultrawide lens (great for wide establishing shots)');
+  if (S.lensProfile?.telephoto) lines.push('telephoto/zoom lens (great for compressed close-ups and speaker shots)');
+  if (S.lensProfile?.cinematic) lines.push('cinematic/portrait mode (great for shallow depth-of-field people shots)');
+  if (manual && lines.length) return `\nCamera: ${manual} (${lines.join(', ')}). Include shots that leverage these lenses.`;
+  if (manual) return `\nCamera: ${manual}. Suggest shots that suit this device.`;
+  if (lines.length) return `\nThis user's phone has: ${lines.join(', ')}. Include shots that leverage these lenses.`;
+  return '';
+}
+
+async function detectLensesAndFill() {
+  const btn = document.getElementById('detect-btn');
+  if (btn) { btn.textContent = 'Detecting…'; btn.disabled = true; }
+  await detectLenses();
+  if (btn) { btn.textContent = 'Auto-detect'; btn.disabled = false; }
+  if (S.lensProfile?.labels?.length) {
+    const parts = [];
+    if (S.lensProfile.ultrawide) parts.push('Ultrawide');
+    if (S.lensProfile.telephoto) parts.push('Telephoto');
+    if (S.lensProfile.cinematic) parts.push('Cinematic');
+    const desc = parts.length ? parts.join(' + ') : (S.lensProfile.count + ' cameras');
+    S.form.camera = `Phone — ${desc}`;
+    const inp = document.getElementById('f-camera');
+    if (inp) inp.value = S.form.camera;
+  } else {
+    showBanner('Could not detect — enter your device manually.', 'warn', 3000);
+  }
 }
 
 /* ──────────────────────────────────────────
    CLAUDE API
 ────────────────────────────────────────── */
 function buildSystemPrompt() {
+  if (S.form.videoMode === 'subject') return buildSubjectSystemPrompt();
   return `You are an expert videographer and creative director helping people capture compelling short-form video content for professional social media — primarily LinkedIn. You specialise in experience coverage: events, conferences, trips, and live moments.
 
 B-ROLL SHOT TYPES AVAILABLE:
@@ -2067,22 +2100,73 @@ SCRIPT GENERATION:
   - If no takeaway was provided, infer a strong professional angle from the event topic`;
 }
 
-function buildUserMessage(newDir) {
-  const { eventName, eventLocation, topic, duration, skillLevel, role, takeaway, tone } = S.form;
-  const level = SKILL_LABELS[skillLevel];
-  const date  = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
-  const lens  = lensPromptHint();
-  const shotCount = Math.round(duration / 4);
+function buildSubjectSystemPrompt() {
+  return `You are an expert LinkedIn content strategist and videographer helping professionals create thought-leadership video content. Your job is to generate a b-roll shot list and a talking head script for a short-form LinkedIn video on a specific topic or point of view.
 
-  const fullEvent = eventLocation ? `${eventName} in ${eventLocation}` : eventName;
-  const roleLine    = role    ? `Role: ${role}.` : '';
-  const takeLine    = takeaway?.trim() ? `Key takeaway: "${takeaway.trim()}".` : '';
-  const toneLine    = tone    ? `Script tone: ${tone}.` : '';
+B-ROLL SHOT TYPES AVAILABLE:
+  static     – Camera completely locked off, no movement
+  pan        – Horizontal rotation left/right
+  tilt       – Vertical rotation up/down
+  tracking   – Camera physically follows a moving subject
+  slow-mo    – Captured at high frame rate (60fps or 120fps) for slow playback
+  hyperlapse – Walking shot dramatically sped up via the Mimo app
+  timelapse  – Stationary scene captured over time via the Mimo app
+  zoom       – Move closer to subject or use optical zoom
+
+SKILL-LEVEL RULES (strictly enforced):
+  Beginner (1)     → ONLY: static, pan, tilt
+  Intermediate (2) → Beginner types PLUS: tracking, slow-mo (fps: "60")
+  Advanced (3)     → All types including: hyperlapse, timelapse, slow-mo (fps: "120"), zoom
+
+SECTIONS — assign every shot to exactly one of these section names (use the exact string):
+  "Environment"   – the space where filming happens: desk, café, office, outdoors
+  "The Subject"   – objects, screens, tools, whiteboards, or anything that illustrates the topic
+  "People"        – colleagues, candid human moments, natural reactions
+  "Details"       – macro textures that add visual rhythm and interest
+  "Moments"       – authentic unguarded moments: thinking, working, a quiet pause
+
+SHOT ORDERING: shots should flow Environment → The Subject → People → Details → Moments
+
+SHOT COUNT: Generate EXACTLY Math.round(durationSeconds / 4) shots. Example: 60s → 15 shots, 30s → 8 shots.
+
+STRETCH SHOTS (REQUIRED):
+  The last 1–2 shots must be creative "stretch" shots — unusual framings that push the user without requiring special apps. Native types only: static, pan, tilt, tracking, zoom.
+  Scale by skill: Beginner = unusual static angle; Intermediate = pan through a foreground object; Advanced = candid zoom or tracking through foreground.
+  Mark with "stretch": true. All others get "stretch": false.
+
+OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary. Schema:
+{"projectName":"string","script":"string","shots":[{"id":"shot-1","type":"string","section":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false,"stretch":false}]}
+  - section: one of the 5 section names above
+  - app: null or "Mimo" (for hyperlapse/timelapse only)
+  - fps: null or "60" or "120" (for slow-mo only)
+
+SCRIPT GENERATION:
+  The "script" field is a 60–90 second talking head script for LinkedIn. This is a perspective piece, NOT an event recap.
+  - Open with a hook: a counter-intuitive observation, a question the audience hasn't asked themselves, or a surprising statement about the topic. NEVER start with "Hey everyone" or introduce yourself.
+  - Use the audience field (if provided) to tune vocabulary and framing
+  - Tone guide: professional = measured, 2–3 incisive observations; excited = high energy, personal story; personal = candid, honest, a moment of real reflection
+  - Length: 3–5 short paragraphs, each 2–3 sentences. No bullet points.
+  - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption
+  - Close with a thought-provoking question or a soft call to action that invites the audience to engage
+  - Write in first person, natural spoken cadence, punctuated for pauses
+  - If no takeaway was provided, infer a strong, specific professional insight from the topic`;
+}
+
+function buildUserMessage(newDir) {
+  const { eventName, eventLocation, topic, duration, skillLevel, role, takeaway, tone, subject, audience, videoMode } = S.form;
+  const level     = SKILL_LABELS[skillLevel];
+  const date      = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
+  const lens      = lensPromptHint();
+  const shotCount = Math.round(duration / 4);
+  const dateSlug  = new Date().toISOString().slice(0,10);
 
   if (newDir) {
     const done   = S.project.shots.filter(s => s.completed);
     const undone = S.project.shots.filter(s => !s.completed);
-    return `Original brief: ${duration}-second video about "${topic}" at ${fullEvent}. Skill: ${level}.${lens}
+    const brief  = videoMode === 'subject'
+      ? `${duration}-second video on the topic: "${subject}".`
+      : `${duration}-second video about "${topic}" at ${eventLocation ? `${eventName} in ${eventLocation}` : eventName}.`;
+    return `Original brief: ${brief} Skill: ${level}.${lens}
 
 SHOTS ALREADY FILMED – keep these VERBATIM in your response (do not alter them):
 ${JSON.stringify(done)}
@@ -2095,9 +2179,25 @@ NEW DIRECTION from the user: "${newDir}"
 Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new direction. Total shot count should still be approximately ${shotCount}. Return the same JSON schema including the script field.`;
   }
 
+  if (videoMode === 'subject') {
+    const audLine  = audience?.trim() ? `Audience: ${audience.trim()}.` : '';
+    const takeLine = takeaway?.trim() ? `Key message: "${takeaway.trim()}".` : '';
+    const slug     = (subject || '').trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'') || 'My-Video';
+    return `Create a thought-leadership shot list and talking head script for a ${duration}-second LinkedIn video (${shotCount} shots).
+Topic: "${subject}".
+${audLine} ${takeLine}
+Tone: ${tone}. Skill level: ${level}. Date: ${date}.${lens}
+
+Suggested projectName: "${slug}-${dateSlug}"`;
+  }
+
+  const fullEvent = eventLocation ? `${eventName} in ${eventLocation}` : eventName;
+  const roleLine  = role    ? `Role: ${role}.` : '';
+  const takeLine  = takeaway?.trim() ? `Key takeaway: "${takeaway.trim()}".` : '';
+  const toneLine  = tone    ? `Script tone: ${tone}.` : '';
   return `Create a shot list and talking head script for a ${duration}-second experience coverage video (${shotCount} shots) about "${topic}" at ${fullEvent}. Skill level: ${level}. Date: ${date}. ${roleLine} ${takeLine} ${toneLine}${lens}
 
-Suggested projectName format: "${eventName.trim().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}"`;
+Suggested projectName format: "${eventName.trim().replace(/\s+/g,'-')}-${dateSlug}"`;
 }
 
 async function callClaude(newDir) {
@@ -2159,9 +2259,13 @@ async function callClaude(newDir) {
           duration:   S.form.duration,
           skillLevel: S.form.skillLevel,
           videoType:  S.form.videoType,
+          videoMode:  S.form.videoMode,
           role:       S.form.role,
           takeaway:   S.form.takeaway,
           tone:       S.form.tone,
+          subject:    S.form.subject,
+          audience:   S.form.audience,
+          camera:     S.form.camera,
           script:     parsed.script || null,
           shots:      parsed.shots,
           sections:   extractSections(parsed.shots),
@@ -2795,7 +2899,7 @@ function renderHome() {
       <p>Create your first shot list and start capturing footage that tells a real story.</p>
     </div>
     <div class="home-actions">
-      <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
+      <button class="btn btn-primary btn-large" onclick="startNew()">✨ New Video</button>
       <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
       <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 School</button>
@@ -2810,7 +2914,7 @@ function renderHome() {
       <div class="project-card-main" onclick="openProject('${p.id}')">
         <div class="project-card-info">
           <div class="project-name">${esc(p.name||'Untitled Project')}</div>
-          <div class="project-meta">${esc(p.event||'')} · ${p.shots.length} shots${p.videoType ? ` · <span class="type-pill">${esc(p.videoType==='experience-coverage'?'Experience Coverage':p.videoType)}</span>` : ''}</div>
+          <div class="project-meta">${esc(p.event||'')} · ${p.shots.length} shots${p.videoType ? ` · <span class="type-pill">${esc(p.videoType==='experience-coverage'?'Experience Coverage':p.videoType==='thought-leadership'?'Thought Leadership':p.videoType)}</span>` : ''}</div>
           <div class="mini-progress-track"><div class="mini-progress-fill" style="width:${pct}%"></div></div>
           <div class="project-pct">${pct}% complete</div>
         </div>
@@ -2827,7 +2931,7 @@ function renderHome() {
   return `<p class="section-title">Your Projects</p>
     <div class="project-list">${cards}</div>
     <div class="home-actions">
-      <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
+      <button class="btn btn-primary btn-large" onclick="startNew()">✨ New Video</button>
       <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
       <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 School</button>
@@ -3008,16 +3112,21 @@ function builderSave() {
    SCREEN: NEW PROJECT
 ────────────────────────────────────────── */
 function startNew() {
-  S.form = { eventName:'', eventLocation:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false, role:'attendee', takeaway:'', tone:'professional', videoType:'experience-coverage' };
+  S.form = { videoMode:'event', eventName:'', eventLocation:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false, role:'attendee', takeaway:'', tone:'professional', videoType:'experience-coverage', camera:'', subject:'', audience:'' };
   S.lensProfile = null;
   goTo('new');
   detectLenses(); /* async — updates badge when ready */
 }
 
 function autoNameValue() {
-  if (!S.form.eventName) return 'My-Event-' + new Date().toISOString().slice(0,10);
-  const base = S.form.eventName.trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'');
-  return (base || 'Event') + '-' + new Date().toISOString().slice(0,10);
+  const slug = str => str.trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'');
+  const date = new Date().toISOString().slice(0,10);
+  if (S.form.videoMode === 'subject') {
+    const base = slug(S.form.subject || '');
+    return (base || 'My-Video') + '-' + date;
+  }
+  const base = slug(S.form.eventName || '');
+  return (base || 'My-Event') + '-' + date;
 }
 
 function autoName() {
@@ -3029,83 +3138,110 @@ function autoName() {
 
 function renderNew() {
   const durIdx = Math.max(0, DURATION_OPTS.indexOf(S.form.duration));
-  const roles = [['attendee','Attendee'],['speaker','Speaker'],['organiser','Organiser'],['exhibitor','Exhibitor']];
-  const tones = [['professional','Thoughtful & Professional'],['excited','Energetic & Excited'],['personal','Candid & Personal']];
-  return `<div>
-    <div class="screen-title">New Project</div>
+  const roles  = [['attendee','Attendee'],['speaker','Speaker'],['organiser','Organiser'],['exhibitor','Exhibitor']];
+  const tones  = [['professional','Thoughtful & Professional'],['excited','Energetic & Excited'],['personal','Candid & Personal']];
+  const isEvent = S.form.videoMode !== 'subject';
 
-    <div class="form-group">
-      <label>Video type</label>
-      <div class="type-select-pill">Experience Coverage <span class="type-coming-soon">More types coming soon</span></div>
-    </div>
-
-    <div class="form-group">
-      <label>Event name</label>
-      <input type="text" id="f-event" value="${esc(S.form.eventName)}"
-             placeholder="e.g. PegaWorld iGov Summit"
-             oninput="S.form.eventName=this.value;autoName()" autocomplete="off">
-    </div>
-
-    <div class="form-group">
-      <label>Location</label>
-      <input type="text" id="f-location" value="${esc(S.form.eventLocation)}"
-             placeholder="e.g. Las Vegas, NV"
-             oninput="S.form.eventLocation=this.value" autocomplete="off">
-    </div>
-
-    <div class="form-group">
-      <label>What is the video about?</label>
-      <input type="text" id="f-topic" value="${esc(S.form.topic)}"
-             placeholder="e.g. Insights from the AI track at PegaWorld"
-             oninput="S.form.topic=this.value" autocomplete="off">
-    </div>
-
-    <div class="form-group">
-      <label>Your role at this event</label>
-      <div class="seg-group">
-        ${roles.map(([v,l])=>`<button class="seg-btn${S.form.role===v?' active':''}" onclick="S.form.role='${v}';render()">${l}</button>`).join('')}
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>One thing viewers should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
-      <input type="text" id="f-takeaway" value="${esc(S.form.takeaway)}"
-             placeholder="e.g. Automation doesn't replace people — it changes what they focus on"
-             maxlength="140"
-             oninput="S.form.takeaway=this.value" autocomplete="off">
-    </div>
-
+  const sharedToneFields = `
     <div class="form-group">
       <label>Tone for your talking head</label>
       <div class="seg-group">
         ${tones.map(([v,l])=>`<button class="seg-btn${S.form.tone===v?' active':''}" onclick="S.form.tone='${v}';render()">${l}</button>`).join('')}
       </div>
     </div>
-
     <div class="form-group">
       <label>Video length: <strong id="dur-label">${S.form.duration} seconds</strong></label>
       <input type="range" id="f-duration" min="0" max="5" step="1" value="${durIdx}">
-      <div class="slider-labels">
-        ${DURATION_OPTS.map(d=>`<span>${d}s</span>`).join('')}
-      </div>
+      <div class="slider-labels">${DURATION_OPTS.map(d=>`<span>${d}s</span>`).join('')}</div>
     </div>
-
     <div class="form-group">
       <label>Your skill level: <strong id="skill-label">${SKILL_LABELS[S.form.skillLevel]}</strong></label>
       <input type="range" id="f-skill" min="1" max="3" step="1" value="${S.form.skillLevel}">
       <div class="slider-labels"><span>Beginner</span><span>Intermediate</span><span>Advanced</span></div>
       <div class="skill-tip" id="skill-tip">${SKILL_TIPS[S.form.skillLevel]}</div>
     </div>
+    <div class="form-group">
+      <label>Camera or phone</label>
+      <div class="camera-field-wrap">
+        <input type="text" id="f-camera" value="${esc(S.form.camera)}"
+               placeholder="e.g. iPhone 15 Pro, GoPro Hero 12, Sony ZV-1"
+               oninput="S.form.camera=this.value" autocomplete="off">
+        <button id="detect-btn" class="btn btn-ghost camera-detect-btn" onclick="detectLensesAndFill()">Auto-detect</button>
+      </div>
+    </div>`;
+
+  const eventFields = `
+    <div class="form-group">
+      <label>Event name</label>
+      <input type="text" id="f-event" value="${esc(S.form.eventName)}"
+             placeholder="e.g. PegaWorld iGov Summit"
+             oninput="S.form.eventName=this.value;autoName()" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Location</label>
+      <input type="text" id="f-location" value="${esc(S.form.eventLocation)}"
+             placeholder="e.g. Las Vegas, NV"
+             oninput="S.form.eventLocation=this.value" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>What is the video about?</label>
+      <input type="text" id="f-topic" value="${esc(S.form.topic)}"
+             placeholder="e.g. What it felt like to be in the room"
+             oninput="S.form.topic=this.value" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Your role at this event</label>
+      <div class="seg-group">
+        ${roles.map(([v,l])=>`<button class="seg-btn${S.form.role===v?' active':''}" onclick="S.form.role='${v}';render()">${l}</button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group">
+      <label>One thing viewers should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
+      <input type="text" id="f-takeaway" value="${esc(S.form.takeaway)}"
+             placeholder="e.g. Automation doesn't replace people — it changes what they focus on"
+             maxlength="140"
+             oninput="S.form.takeaway=this.value" autocomplete="off">
+    </div>`;
+
+  const subjectFields = `
+    <div class="form-group">
+      <label>What's this video about?</label>
+      <input type="text" id="f-subject" value="${esc(S.form.subject)}"
+             placeholder="e.g. Why async meetings changed how my team works"
+             oninput="S.form.subject=this.value;autoName()" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Who is your audience? <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
+      <input type="text" id="f-audience" value="${esc(S.form.audience)}"
+             placeholder="e.g. Marketing leaders, early-career professionals"
+             oninput="S.form.audience=this.value" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>The one thing they should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
+      <input type="text" id="f-takeaway" value="${esc(S.form.takeaway)}"
+             placeholder="e.g. Async isn't about time zones — it's about protecting deep work"
+             maxlength="140"
+             oninput="S.form.takeaway=this.value" autocomplete="off">
+    </div>`;
+
+  return `<div>
+    <div class="screen-title">Create a video about…</div>
+
+    <div class="tab-group">
+      <button class="tab-btn${isEvent?' active':''}" onclick="S.form.videoMode='event';render()">Attending an event</button>
+      <button class="tab-btn${!isEvent?' active':''}" onclick="S.form.videoMode='subject';render()">A topic or subject</button>
+    </div>
+
+    ${isEvent ? eventFields : subjectFields}
+    ${sharedToneFields}
 
     <div class="form-group">
       <label>Project name <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(tap to rename)</span></label>
       <span id="proj-name-edit" class="ce-input" contenteditable="true" role="textbox"
-            aria-label="Project name" data-placeholder="Auto-generated from event name"
+            aria-label="Project name" data-placeholder="Auto-generated"
             oninput="S.form.projectName=this.textContent.trim();S.form.nameTouched=true"
             >${esc(S.form.projectName || autoNameValue())}</span>
     </div>
-
-    <div id="lens-badge" class="lens-badge-wrap">${lensHtml()}</div>
 
     <button class="btn btn-primary btn-large" onclick="validateAndGenerate()">
       ✨ Generate My Shot List
@@ -3114,9 +3250,15 @@ function renderNew() {
 }
 
 function validateAndGenerate() {
-  if (!S.form.eventName.trim()) { showBanner('Please enter an event name.', 'danger'); document.getElementById('f-event')?.focus(); return; }
-  if (!S.form.eventLocation.trim()) { showBanner('Please enter a location.', 'danger'); document.getElementById('f-location')?.focus(); return; }
-  if (!S.form.topic.trim()) { showBanner('Please tell us what the video is about.', 'danger'); document.getElementById('f-topic')?.focus(); return; }
+  if (S.form.videoMode === 'subject') {
+    if (!S.form.subject.trim()) { showBanner('Please describe what your video is about.', 'danger'); document.getElementById('f-subject')?.focus(); return; }
+    S.form.videoType = 'thought-leadership';
+  } else {
+    if (!S.form.eventName.trim()) { showBanner('Please enter an event name.', 'danger'); document.getElementById('f-event')?.focus(); return; }
+    if (!S.form.eventLocation.trim()) { showBanner('Please enter a location.', 'danger'); document.getElementById('f-location')?.focus(); return; }
+    if (!S.form.topic.trim()) { showBanner('Please tell us what the video is about.', 'danger'); document.getElementById('f-topic')?.focus(); return; }
+    S.form.videoType = 'experience-coverage';
+  }
   const nameEl = document.getElementById('proj-name-edit');
   if (nameEl) S.form.projectName = nameEl.textContent.trim() || autoNameValue();
   callClaude(null);
@@ -3163,7 +3305,7 @@ function renderChecklist() {
     ? customFormHtml()
     : `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Shot</button>`;
 
-  const typeLabel = S.project.videoType === 'experience-coverage' ? 'Experience Coverage' : (S.project.videoType || '');
+  const typeLabel = S.project.videoType === 'experience-coverage' ? 'Experience Coverage' : S.project.videoType === 'thought-leadership' ? 'Thought Leadership' : (S.project.videoType || '');
   return `<div class="checklist-hdr">
     <span class="proj-title-edit" contenteditable="true" role="textbox"
           oninput="S.project.name=this.textContent.trim();saveProjects();updateHeader()"
