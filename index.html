@@ -1287,6 +1287,7 @@ const LESSONS = [
         'Export at 1080p and share directly or save to your camera roll',
       ]},
       { kind:'tip', body:'Match b-roll to words: if you say "the keynote hall," show the wide room shot. If you say "the energy in the crowd," show the slow-mo applause clip. Editors call this "covering your track."' },
+      { kind:'banner', body:'Want to edit on desktop? <a href="editor.html" target="_blank" style="color:inherit;font-weight:700;text-decoration:underline">Open the Browser Video Editor</a> — no install, works in Chrome and Firefox.' },
     ],
     gyro: false, gyroAxis: null, gyroLabel: null,
   },
@@ -3094,6 +3095,7 @@ function renderChecklist() {
     <div class="completion-card-title">All shots captured!</div>
     <div class="completion-card-body">Record a 45–90 second talking head, then cut everything together in <strong>CapCut</strong> — free on iPhone and Android.</div>
     <button class="btn btn-primary btn-full" onclick="goToLesson('after-the-shoot')" style="margin-top:12px">✂️ Read the editing guide →</button>
+    <button class="btn btn-ghost btn-full" onclick="window.open('editor.html','_blank')" style="margin-top:8px">🎬 Open Browser Video Editor →</button>
   </div>` : ''}
 
   ${S.reorderMode ? '' : `<div id="add-section-area">${addSectionAreaHtml()}</div>`}

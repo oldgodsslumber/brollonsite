@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>B-Roll Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0A0F1E;
+      --surf:     #1E293B;
+      --surf2:    #141C2E;
+      --border:   #2D3E55;
+      --text:     #E2E8F0;
+      --muted:    #8B92A5;
+      --accent:   #0047BB;
+      --warn:     #F5A623;
+      --success:  #22C55E;
+      --danger:   #EF4444;
+      --radius:   12px;
+      --radius-sm:8px;
+      --hdr:      52px;
+    }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px; line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .app-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--surf2); border-bottom: 1px solid var(--border);
+      height: var(--hdr); display: flex; align-items: center; gap: 12px;
+      padding: 0 16px;
+    }
+    .app-header a {
+      color: var(--muted); text-decoration: none; font-size: 20px;
+      line-height: 1; padding: 4px;
+    }
+    .app-header h1 { font-size: 16px; font-weight: 700; }
+    .app-header h1 span { color: var(--accent); }
+
+    /* ── Layout ── */
+    .editor-wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+      animation: fadeUp .3s ease both;
+    }
+    .card:nth-child(2) { animation-delay: .05s; }
+    .card:nth-child(3) { animation-delay: .10s; }
+    .card:nth-child(4) { animation-delay: .15s; }
+    .card-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title::before {
+      content: ''; width: 3px; height: 12px;
+      background: var(--accent); border-radius: 2px; flex-shrink: 0;
+    }
+
+    /* ── Upload zones ── */
+    .upload-two-col { display: flex; flex-direction: column; gap: 12px; }
+    @media (min-width: 600px) {
+      .upload-two-col { flex-direction: row; }
+      .upload-two-col > div { flex: 1; }
+    }
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 20px 12px; text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s; user-select: none;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent); background: rgba(0,71,187,0.08);
+    }
+    .upload-zone.loaded { border-style: solid; border-color: var(--success); }
+    .upload-zone input[type=file] { display: none; }
+    .upload-zone-icon { font-size: 26px; margin-bottom: 6px; }
+    .upload-zone-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+    .upload-zone-hint  { font-size: 11px; color: var(--muted); }
+    .upload-zone-info  { font-size: 12px; color: var(--success); margin-top: 6px; font-weight: 600; word-break: break-all; }
+
+    /* ── Thumbnail strip ── */
+    .thumb-section { margin-top: 14px; }
+    .thumb-section-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .thumb-strip {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .thumb-item {
+      flex-shrink: 0; width: 80px; cursor: pointer;
+      border-radius: 6px; overflow: hidden; border: 2px solid transparent;
+      transition: border-color .15s; background: var(--surf2);
+    }
+    .thumb-item.selected { border-color: var(--accent); }
+    .thumb-item canvas, .thumb-item img { width: 80px; height: 54px; display: block; object-fit: cover; }
+    .thumb-item-footer {
+      padding: 2px 4px; font-size: 9px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      display: flex; justify-content: space-between;
+    }
+    .thumb-placeholder {
+      width: 80px; height: 54px; background: var(--surf2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; font-family: inherit;
+      transition: background .15s, opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #0055dd; }
+    .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { background: var(--surf2); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-full { width: 100%; }
+
+    /* ── Timeline ── */
+    .tl-outer {
+      overflow-x: auto; overflow-y: hidden;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surf2);
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .tl-inner { position: relative; }
+
+    /* Ruler */
+    .tl-ruler {
+      height: 22px; border-bottom: 1px solid var(--border);
+      position: relative; margin-left: 64px;
+    }
+    .tl-ruler-tick {
+      position: absolute; bottom: 0; width: 1px; background: var(--border); height: 6px;
+    }
+    .tl-ruler-label {
+      position: absolute; bottom: 4px; font-size: 9px; color: var(--muted);
+      transform: translateX(-50%); white-space: nowrap;
+    }
+
+    /* Track rows */
+    .tl-row { display: flex; height: 44px; }
+    .tl-row-label {
+      width: 64px; flex-shrink: 0; font-size: 9px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase;
+      display: flex; align-items: center; padding: 0 8px;
+      border-right: 1px solid var(--border);
+    }
+    .tl-row-area {
+      position: relative; flex: 1; overflow: hidden;
+    }
+
+    /* A-roll bar */
+    .aroll-bar {
+      position: absolute; top: 6px; left: 0; height: 32px;
+      background: rgba(0,71,187,0.25); border: 1px solid rgba(0,71,187,0.5);
+      border-radius: 4px; display: flex; align-items: center;
+      padding: 0 8px; font-size: 10px; color: var(--text);
+      white-space: nowrap; overflow: hidden; user-select: none;
+    }
+
+    /* Clip blocks */
+    .clip-block {
+      position: absolute; top: 6px; height: 32px;
+      background: rgba(245,166,35,0.25); border: 1px solid rgba(245,166,35,0.55);
+      border-radius: 4px; cursor: grab; user-select: none;
+      display: flex; align-items: center; padding: 0 6px;
+      font-size: 10px; font-weight: 600; color: var(--text);
+      overflow: hidden; white-space: nowrap;
+      transition: border-color .12s, background .12s;
+    }
+    .clip-block.selected {
+      border-color: #fff; background: rgba(245,166,35,0.45);
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+    }
+    .clip-block:active { cursor: grabbing; }
+
+    /* Playhead */
+    .tl-playhead {
+      position: absolute; top: 0; bottom: 0; width: 2px;
+      background: var(--danger); z-index: 10; pointer-events: none;
+    }
+    .tl-playhead::before {
+      content: ''; position: absolute; top: -1px; left: -4px;
+      border-left: 5px solid transparent; border-right: 5px solid transparent;
+      border-top: 7px solid var(--danger);
+    }
+
+    /* ── Playback controls ── */
+    .playback-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    }
+    .time-display { font-size: 12px; font-weight: 600; color: var(--muted); min-width: 88px; }
+    input[type=range].scrubber {
+      flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
+      background: var(--border); border-radius: 2px; cursor: pointer; outline: none;
+    }
+    input[type=range].scrubber::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+    }
+
+    /* ── Preview ── */
+    .preview-wrap {
+      position: relative; width: 100%; aspect-ratio: 16/9;
+      background: #000; border-radius: var(--radius-sm); overflow: hidden;
+      margin-top: 12px;
+    }
+    .preview-wrap video {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+    }
+    #broll-overlay { opacity: 0; transition: opacity .08s; }
+
+    /* ── Trim panel ── */
+    .trim-panel {
+      background: var(--surf2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px; margin-top: 10px;
+    }
+    .trim-panel-hdr {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px;
+    }
+    .trim-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .trim-field { display: flex; flex-direction: column; gap: 2px; }
+    .trim-field label { font-size: 10px; color: var(--muted); }
+    .trim-field input[type=number] {
+      width: 72px; padding: 5px 8px; font-size: 13px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-family: inherit; outline: none;
+    }
+    .trim-field input[type=number]:focus { border-color: var(--accent); }
+
+    /* ── Export ── */
+    .export-status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+    .progress-track {
+      height: 6px; background: var(--surf2); border-radius: 3px;
+      margin-top: 8px; overflow: hidden; display: none;
+    }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; width: 0%; }
+
+    /* ── Banners ── */
+    .info-banner {
+      background: rgba(0,71,187,0.1); border: 1px solid rgba(0,71,187,0.25);
+      border-radius: var(--radius-sm); padding: 10px 14px;
+      font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 14px;
+    }
+    .info-banner strong { color: var(--text); }
+    .warn-banner {
+      background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.3);
+      border-radius: var(--radius-sm); padding: 10px 14px;
+      font-size: 13px; color: var(--warn); line-height: 1.55;
+    }
+    .tip-inline { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+    .tip-inline strong { color: var(--text); }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <a href="index.html" title="Back to Planner">←</a>
+  <h1><span>B-Roll</span> Editor</h1>
+</header>
+
+<main class="editor-wrap">
+
+  <div class="info-banner">
+    <strong>How it works:</strong> Upload your talking-head clip (A-roll) and up to 15 b-roll clips.
+    Drag b-roll clips onto the timeline to place them, trim if needed, then export a composited MP4.
+    Everything runs in your browser — no uploads, no accounts.
+  </div>
+
+  <!-- ────────────────────────────────────────────
+       CARD 1 — Upload
+  ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">1 · Upload Footage</div>
+    <div class="upload-two-col">
+
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">🎤 A-Roll — Talking head</div>
+        <div class="upload-zone" id="aroll-zone"
+             onclick="document.getElementById('aroll-input').click()"
+             ondragover="onDragOver(event,'aroll-zone')"
+             ondragleave="onDragLeave('aroll-zone')"
+             ondrop="onDrop(event,'aroll')">
+          <input type="file" id="aroll-input" accept="video/*" onchange="loadAroll(this.files[0])">
+          <div class="upload-zone-icon">🎬</div>
+          <div class="upload-zone-label">Tap to select</div>
+          <div class="upload-zone-hint">MP4 · 60–90 seconds recommended</div>
+          <div class="upload-zone-info" id="aroll-info"></div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">🎥 B-Roll — Up to 15 clips</div>
+        <div class="upload-zone" id="broll-zone"
+             onclick="document.getElementById('broll-input').click()"
+             ondragover="onDragOver(event,'broll-zone')"
+             ondragleave="onDragLeave('broll-zone')"
+             ondrop="onDrop(event,'broll')">
+          <input type="file" id="broll-input" accept="video/*" multiple onchange="loadBroll(this.files)">
+          <div class="upload-zone-icon">🎞️</div>
+          <div class="upload-zone-label">Tap to select</div>
+          <div class="upload-zone-hint">H.264 MP4 gives fastest export</div>
+          <div class="upload-zone-info" id="broll-info"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="thumb-section" id="thumb-section" style="display:none">
+      <div class="thumb-section-label">
+        Tap a clip below to select it, then tap the <strong style="color:var(--text)">B-Roll track</strong> on the timeline to place it.
+      </div>
+      <div class="thumb-strip" id="thumb-strip"></div>
+    </div>
+  </div>
+
+  <!-- ────────────────────────────────────────────
+       CARD 2 — Timeline
+  ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">2 · Arrange on Timeline</div>
+
+    <div id="tl-no-aroll" class="warn-banner">
+      Upload your A-roll video first to enable the timeline.
+    </div>
+
+    <div id="tl-ui" style="display:none">
+
+      <!-- Timeline tracks -->
+      <div class="tl-outer" id="tl-outer">
+        <div class="tl-inner" id="tl-inner">
+          <div class="tl-ruler" id="tl-ruler"></div>
+          <!-- B-roll track -->
+          <div class="tl-row">
+            <div class="tl-row-label">B-Roll</div>
+            <div class="tl-row-area" id="broll-track" onclick="onTrackClick(event)">
+              <!-- clip divs injected here -->
+            </div>
+          </div>
+          <!-- A-roll track -->
+          <div class="tl-row">
+            <div class="tl-row-label">A-Roll</div>
+            <div class="tl-row-area" id="aroll-track">
+              <div class="aroll-bar" id="aroll-bar">A-Roll</div>
+            </div>
+          </div>
+          <!-- Playhead overlaps both tracks -->
+          <div class="tl-playhead" id="tl-playhead" style="left:0;top:22px;height:88px"></div>
+        </div>
+      </div>
+
+      <!-- Playback controls -->
+      <div class="playback-row">
+        <button class="btn btn-ghost btn-sm" id="play-btn" onclick="togglePlay()">▶ Play</button>
+        <span class="time-display" id="time-display">0:00 / 0:00</span>
+        <input type="range" class="scrubber" id="scrubber" min="0" max="100" step="0.05"
+               value="0" oninput="onScrub(this.value)" onchange="onScrub(this.value)">
+      </div>
+
+      <!-- Trim panel -->
+      <div class="trim-panel" id="trim-panel" style="display:none">
+        <div class="trim-panel-hdr" id="trim-panel-hdr">Selected clip</div>
+        <div class="trim-row">
+          <div class="trim-field">
+            <label>In-point (s)</label>
+            <input type="number" id="trim-in" min="0" step="0.1" oninput="applyTrim()">
+          </div>
+          <div class="trim-field">
+            <label>Out-point (s)</label>
+            <input type="number" id="trim-out" min="0" step="0.1" oninput="applyTrim()">
+          </div>
+          <div class="trim-field">
+            <label>Starts at (s)</label>
+            <input type="number" id="trim-track-start" min="0" step="0.1" oninput="applyTrim()">
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="deleteClip()" style="align-self:flex-end">🗑 Remove</button>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div class="preview-wrap">
+        <video id="aroll-preview" playsinline preload="metadata"></video>
+        <video id="broll-overlay" playsinline muted preload="auto"></video>
+      </div>
+
+      <p class="tip-inline">
+        <strong>Tip:</strong> Select a b-roll clip from the rack, tap the B-Roll track to place it.
+        Drag placed clips to reposition. Tap a placed clip to trim its in/out points or remove it.
+      </p>
+    </div>
+  </div>
+
+  <!-- ────────────────────────────────────────────
+       CARD 3 — Export
+  ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">3 · Export</div>
+    <div class="info-banner" style="margin-bottom:12px">
+      Export runs in your browser via FFmpeg. <strong>First use downloads ~40MB of FFmpeg</strong> (cached after that).
+      Rendering takes 30 seconds – 2 minutes. Works best in Chrome or Firefox.
+    </div>
+    <button class="btn btn-primary btn-full" id="export-btn" onclick="startExport()" disabled>
+      ⬇ Export MP4
+    </button>
+    <div class="export-status" id="export-status">Upload footage and place at least one b-roll clip to export.</div>
+    <div class="progress-track" id="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+</main>
+
+<script type="module">
+// ── STATE ────────────────────────────────────────────────
+const E = {
+  aroll:        null,  // { file, url, duration, name }
+  broll:        [],    // [{ file, url, duration, name, thumb }]
+  clips:        [],    // [{ brollIdx, trackStart, inPoint, outPoint }]
+  selected:     null,  // index into E.clips
+  selectedBroll:null,  // index into E.broll (for placement)
+  playing:      false,
+  pxPerSec:     14,    // timeline zoom
+};
+
+// ── DRAG-OVER / DROP ─────────────────────────────────────
+window.onDragOver = (e, id) => {
+  e.preventDefault();
+  document.getElementById(id).classList.add('drag-over');
+};
+window.onDragLeave = id => document.getElementById(id).classList.remove('drag-over');
+window.onDrop = (e, type) => {
+  e.preventDefault();
+  onDragLeave(type === 'aroll' ? 'aroll-zone' : 'broll-zone');
+  if (type === 'aroll') loadAroll(e.dataTransfer.files[0]);
+  else loadBroll(e.dataTransfer.files);
+};
+
+// ── HELPERS ──────────────────────────────────────────────
+function fmtDur(s) {
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+
+function getVideoDuration(url) {
+  return new Promise(resolve => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => resolve(v.duration);
+    v.onerror = () => resolve(0);
+    v.src = url;
+  });
+}
+
+async function generateThumb(url) {
+  return new Promise(resolve => {
+    const v = document.createElement('video');
+    const c = document.createElement('canvas');
+    c.width = 160; c.height = 90;
+    v.muted = true; v.playsInline = true; v.preload = 'metadata';
+    v.onloadeddata = () => { v.currentTime = Math.min(1, v.duration * 0.1); };
+    v.onseeked = () => {
+      c.getContext('2d').drawImage(v, 0, 0, 160, 90);
+      v.src = '';
+      resolve(c.toDataURL('image/jpeg', 0.7));
+    };
+    v.onerror = () => resolve(null);
+    v.src = url;
+  });
+}
+
+// ── UPLOAD ───────────────────────────────────────────────
+window.loadAroll = async file => {
+  if (!file || !file.type.startsWith('video/')) return;
+  if (E.aroll) URL.revokeObjectURL(E.aroll.url);
+  const url = URL.createObjectURL(file);
+  const duration = await getVideoDuration(url);
+  E.aroll = { file, url, duration, name: file.name };
+
+  const zone = document.getElementById('aroll-zone');
+  zone.classList.add('loaded');
+  document.getElementById('aroll-info').textContent =
+    `✓ ${file.name} · ${fmtDur(duration)}`;
+
+  const vid = document.getElementById('aroll-preview');
+  vid.src = url; vid.load();
+
+  initTimeline();
+  updateExportBtn();
+};
+
+window.loadBroll = async files => {
+  const list = Array.from(files).filter(f => f.type.startsWith('video/'));
+  if (E.broll.length + list.length > 15) {
+    alert(`Maximum 15 b-roll clips. You already have ${E.broll.length}.`);
+    return;
+  }
+  for (const file of list) {
+    const url = URL.createObjectURL(file);
+    const duration = await getVideoDuration(url);
+    const thumb = await generateThumb(url);
+    E.broll.push({ file, url, duration, name: file.name, thumb });
+  }
+  const zone = document.getElementById('broll-zone');
+  zone.classList.add('loaded');
+  document.getElementById('broll-info').textContent =
+    `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
+  renderThumbStrip();
+};
+
+// ── THUMBNAIL STRIP ──────────────────────────────────────
+function renderThumbStrip() {
+  const strip = document.getElementById('thumb-strip');
+  strip.innerHTML = E.broll.map((b, i) => `
+    <div class="thumb-item${E.selectedBroll === i ? ' selected' : ''}"
+         onclick="selectBroll(${i})" title="${b.name}">
+      ${b.thumb
+        ? `<img src="${b.thumb}" alt="">`
+        : `<div class="thumb-placeholder">🎬</div>`}
+      <div class="thumb-item-footer">
+        <span style="overflow:hidden;text-overflow:ellipsis">${b.name.replace(/\.[^.]+$/, '')}</span>
+        <span style="flex-shrink:0;margin-left:4px;color:var(--accent)">${fmtDur(b.duration)}</span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('thumb-section').style.display = E.broll.length ? '' : 'none';
+}
+
+window.selectBroll = i => {
+  E.selectedBroll = E.selectedBroll === i ? null : i;
+  E.selected = null;
+  renderThumbStrip();
+  renderClips();
+  hideTrimPanel();
+};
+
+// ── TIMELINE ─────────────────────────────────────────────
+function initTimeline() {
+  document.getElementById('tl-no-aroll').style.display = 'none';
+  document.getElementById('tl-ui').style.display = '';
+
+  const dur = E.aroll.duration;
+  const totalPx = Math.ceil(dur * E.pxPerSec) + 20;
+
+  const inner = document.getElementById('tl-inner');
+  inner.style.minWidth = (totalPx + 64) + 'px';
+
+  const abar = document.getElementById('aroll-bar');
+  abar.style.width = Math.ceil(dur * E.pxPerSec) + 'px';
+  abar.textContent = E.aroll.name.replace(/\.[^.]+$/, '') + ' · ' + fmtDur(dur);
+
+  buildRuler(dur);
+
+  const scrub = document.getElementById('scrubber');
+  scrub.max = dur;
+  document.getElementById('time-display').textContent = `0:00 / ${fmtDur(dur)}`;
+
+  renderClips();
+}
+
+function buildRuler(dur) {
+  const ruler = document.getElementById('tl-ruler');
+  const interval = dur <= 30 ? 5 : dur <= 120 ? 10 : 30;
+  let html = '';
+  for (let t = 0; t <= dur; t += interval) {
+    const x = t * E.pxPerSec;
+    html += `<div class="tl-ruler-tick" style="left:${x}px"></div>`;
+    html += `<div class="tl-ruler-label" style="left:${x}px">${fmtDur(t)}</div>`;
+  }
+  ruler.innerHTML = html;
+}
+
+window.onTrackClick = e => {
+  if (E.selectedBroll === null) return; // nothing to place
+  const track = document.getElementById('broll-track');
+  const scrollLeft = document.getElementById('tl-outer').scrollLeft;
+  const rect = track.getBoundingClientRect();
+  const clickX = e.clientX - rect.left + scrollLeft;
+  const timePos = Math.max(0, Math.round((clickX / E.pxPerSec) * 10) / 10);
+  const bclip = E.broll[E.selectedBroll];
+
+  E.clips.push({
+    brollIdx:   E.selectedBroll,
+    trackStart: timePos,
+    inPoint:    0,
+    outPoint:   bclip.duration,
+  });
+  E.selected = E.clips.length - 1;
+  E.selectedBroll = null;
+
+  renderThumbStrip();
+  renderClips();
+  showTrimPanel();
+  updateExportBtn();
+};
+
+function renderClips() {
+  const track = document.getElementById('broll-track');
+  // Remove old clip blocks
+  track.querySelectorAll('.clip-block').forEach(el => el.remove());
+
+  E.clips.forEach((clip, i) => {
+    const b = E.broll[clip.brollIdx];
+    const dur = clip.outPoint - clip.inPoint;
+    const w = Math.max(16, dur * E.pxPerSec);
+    const x = clip.trackStart * E.pxPerSec;
+
+    const el = document.createElement('div');
+    el.className = 'clip-block' + (E.selected === i ? ' selected' : '');
+    el.style.left = x + 'px';
+    el.style.width = w + 'px';
+    el.dataset.idx = i;
+    el.textContent = b.name.replace(/\.[^.]+$/, '');
+    el.title = `${b.name} · ${fmtDur(dur)} @ ${fmtDur(clip.trackStart)}`;
+
+    el.addEventListener('pointerdown', startDrag);
+    el.addEventListener('click', ev => {
+      ev.stopPropagation();
+      E.selected = i;
+      E.selectedBroll = null;
+      renderThumbStrip();
+      renderClips();
+      showTrimPanel();
+    });
+
+    track.appendChild(el);
+  });
+
+  updatePlayheadPos(document.getElementById('aroll-preview').currentTime || 0);
+}
+
+// ── CLIP DRAG ────────────────────────────────────────────
+let _drag = null;
+function startDrag(e) {
+  _drag = {
+    idx:   parseInt(e.currentTarget.dataset.idx),
+    startX: e.clientX,
+    origStart: E.clips[parseInt(e.currentTarget.dataset.idx)].trackStart,
+  };
+  e.currentTarget.setPointerCapture(e.pointerId);
+  e.preventDefault();
+}
+document.addEventListener('pointermove', e => {
+  if (!_drag) return;
+  const dt = (e.clientX - _drag.startX) / E.pxPerSec;
+  E.clips[_drag.idx].trackStart = Math.max(0, Math.round((_drag.origStart + dt) * 10) / 10);
+  renderClips();
+  if (E.selected === _drag.idx) fillTrimInputs();
+});
+document.addEventListener('pointerup', () => { _drag = null; });
+
+// ── TRIM PANEL ───────────────────────────────────────────
+function showTrimPanel() {
+  if (E.selected === null) return;
+  const clip = E.clips[E.selected];
+  const b = E.broll[clip.brollIdx];
+  document.getElementById('trim-panel').style.display = '';
+  document.getElementById('trim-panel-hdr').textContent =
+    `Clip: ${b.name.replace(/\.[^.]+$/, '')} (max ${fmtDur(b.duration)})`;
+  fillTrimInputs();
+}
+function hideTrimPanel() { document.getElementById('trim-panel').style.display = 'none'; }
+
+function fillTrimInputs() {
+  const c = E.clips[E.selected];
+  document.getElementById('trim-in').value = c.inPoint.toFixed(1);
+  document.getElementById('trim-out').value = c.outPoint.toFixed(1);
+  document.getElementById('trim-track-start').value = c.trackStart.toFixed(1);
+}
+
+window.applyTrim = () => {
+  if (E.selected === null) return;
+  const c = E.clips[E.selected];
+  const b = E.broll[c.brollIdx];
+  c.inPoint    = Math.max(0, parseFloat(document.getElementById('trim-in').value) || 0);
+  c.outPoint   = Math.min(b.duration, parseFloat(document.getElementById('trim-out').value) || b.duration);
+  c.trackStart = Math.max(0, parseFloat(document.getElementById('trim-track-start').value) || 0);
+  if (c.inPoint >= c.outPoint) c.outPoint = Math.min(c.inPoint + 0.5, b.duration);
+  renderClips();
+};
+
+window.deleteClip = () => {
+  if (E.selected === null) return;
+  E.clips.splice(E.selected, 1);
+  E.selected = null;
+  hideTrimPanel();
+  renderClips();
+  updateExportBtn();
+};
+
+// ── PLAYBACK ─────────────────────────────────────────────
+const aVid = document.getElementById('aroll-preview');
+const bVid = document.getElementById('broll-overlay');
+
+aVid.addEventListener('timeupdate', () => {
+  const t = aVid.currentTime;
+  syncOverlay(t);
+  updatePlayheadPos(t);
+  const dur = E.aroll ? E.aroll.duration : 0;
+  document.getElementById('time-display').textContent = `${fmtDur(t)} / ${fmtDur(dur)}`;
+  document.getElementById('scrubber').value = t;
+});
+
+aVid.addEventListener('ended', () => {
+  E.playing = false;
+  document.getElementById('play-btn').textContent = '▶ Play';
+  bVid.pause();
+  bVid.style.opacity = '0';
+});
+
+function syncOverlay(t) {
+  const match = E.clips.find(c => {
+    const dur = c.outPoint - c.inPoint;
+    return t >= c.trackStart && t < c.trackStart + dur;
+  });
+  if (match) {
+    const bclip = E.broll[match.brollIdx];
+    const bTime = match.inPoint + (t - match.trackStart);
+    if (bVid.dataset.src !== bclip.url) {
+      bVid.dataset.src = bclip.url;
+      bVid.src = bclip.url;
+      bVid.load();
+    }
+    if (Math.abs(bVid.currentTime - bTime) > 0.35) bVid.currentTime = bTime;
+    if (E.playing && bVid.paused) bVid.play().catch(() => {});
+    bVid.style.opacity = '1';
+  } else {
+    bVid.pause();
+    bVid.style.opacity = '0';
+  }
+}
+
+window.togglePlay = () => {
+  if (!E.aroll) return;
+  E.playing = !E.playing;
+  if (E.playing) {
+    aVid.play();
+    document.getElementById('play-btn').textContent = '⏸ Pause';
+  } else {
+    aVid.pause(); bVid.pause();
+    bVid.style.opacity = '0';
+    document.getElementById('play-btn').textContent = '▶ Play';
+  }
+};
+
+window.onScrub = val => {
+  const t = parseFloat(val);
+  aVid.currentTime = t;
+  syncOverlay(t);
+  updatePlayheadPos(t);
+};
+
+function updatePlayheadPos(t) {
+  document.getElementById('tl-playhead').style.left = (t * E.pxPerSec) + 'px';
+}
+
+// ── EXPORT ───────────────────────────────────────────────
+function updateExportBtn() {
+  const ok = E.aroll && E.clips.length > 0;
+  document.getElementById('export-btn').disabled = !ok;
+  if (!ok) {
+    setStatus(E.aroll
+      ? 'Place at least one b-roll clip on the timeline to export.'
+      : 'Upload your A-roll and b-roll footage, then place clips on the timeline.');
+  } else {
+    setStatus(`Ready — ${E.clips.length} b-roll clip${E.clips.length !== 1 ? 's' : ''} placed.`);
+  }
+}
+
+function setStatus(msg) { document.getElementById('export-status').textContent = msg; }
+
+function setProgress(pct) {
+  const track = document.getElementById('progress-track');
+  const fill  = document.getElementById('progress-fill');
+  track.style.display = pct > 0 ? '' : 'none';
+  fill.style.width = pct + '%';
+}
+
+window.startExport = async () => {
+  if (!E.aroll || E.clips.length === 0) return;
+  const btn = document.getElementById('export-btn');
+  btn.disabled = true;
+  setProgress(1);
+  setStatus('Loading FFmpeg (first time: ~40MB download)…');
+
+  try {
+    const { FFmpeg } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/esm/index.js');
+    const { fetchFile, toBlobURL } = await import('https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js');
+
+    const ffmpeg = new FFmpeg();
+    ffmpeg.on('progress', ({ progress }) => {
+      const pct = Math.min(99, Math.round(progress * 100));
+      setProgress(pct);
+      setStatus(`Rendering… ${pct}%`);
+    });
+    ffmpeg.on('log', ({ message }) => console.log('[ffmpeg]', message));
+
+    setStatus('Loading FFmpeg core…');
+    const base = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
+    });
+
+    setStatus('Writing input files…');
+    await ffmpeg.writeFile('aroll.mp4', await fetchFile(E.aroll.file));
+
+    // Unique b-roll files used
+    const usedIdxs = [...new Set(E.clips.map(c => c.brollIdx))];
+    for (const idx of usedIdxs) {
+      setStatus(`Loading b-roll ${usedIdxs.indexOf(idx) + 1}/${usedIdxs.length}…`);
+      await ffmpeg.writeFile(`br${idx}.mp4`, await fetchFile(E.broll[idx].file));
+    }
+
+    // Build FFmpeg args
+    // Inputs: aroll first, then each unique broll
+    const inputs = ['-i', 'aroll.mp4'];
+    usedIdxs.forEach(idx => inputs.push('-i', `br${idx}.mp4`));
+
+    // Build filter_complex: trim each broll clip then overlay in sequence
+    const parts = [];
+    let prevOut = '0:v';
+
+    E.clips.forEach((clip, i) => {
+      const inputIdx = usedIdxs.indexOf(clip.brollIdx) + 1; // +1 because 0=aroll
+      const dur = clip.outPoint - clip.inPoint;
+      const ts  = clip.trackStart;
+      const te  = ts + dur;
+      const isLast = i === E.clips.length - 1;
+      const bLabel = `[bt${i}]`;
+      const outLabel = isLast ? '[vout]' : `[ov${i}]`;
+
+      // Trim b-roll to in/out window and reset timestamps
+      parts.push(
+        `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},setpts=PTS-STARTPTS${bLabel}`
+      );
+      // Overlay onto growing chain, enable only during clip's timeline window
+      parts.push(
+        `[${prevOut}]${bLabel}overlay=enable='between(t,${ts.toFixed(3)},${te.toFixed(3)})':x=0:y=0${outLabel}`
+      );
+      prevOut = `ov${i}`;
+    });
+
+    setStatus('Compositing video…');
+
+    const args = [
+      ...inputs,
+      '-filter_complex', parts.join(';'),
+      '-map', '[vout]',
+      '-map', '0:a?',        // optional audio — works even if no audio track
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-movflags', '+faststart',
+      'out.mp4',
+    ];
+
+    await ffmpeg.exec(args);
+
+    setStatus('Saving file…');
+    const data = await ffmpeg.readFile('out.mp4');
+    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'broll-edit.mp4' });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    setProgress(100);
+    setStatus('✓ Export complete! Check your downloads folder.');
+    setTimeout(() => setProgress(0), 2000);
+
+  } catch (err) {
+    console.error(err);
+    setStatus('Export failed: ' + err.message +
+      '. Try Chrome or Firefox, and check that your files are H.264 MP4.');
+    setProgress(0);
+  } finally {
+    btn.disabled = false;
+    updateExportBtn();
+  }
+};
+
+// ── INIT ─────────────────────────────────────────────────
+updateExportBtn();
+</script>
+</body>
+</html>
