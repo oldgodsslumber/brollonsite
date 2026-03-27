@@ -3214,18 +3214,28 @@ function goToLesson(id) {
 /* ──────────────────────────────────────────
    B-ROLL SCHOOL — BADGES
 ────────────────────────────────────────── */
-function checkBadge(id, tier = 'gold') {
+function checkBadge(id, tier = null) {
   const RANK = { bronze:1, silver:2, gold:3, platinum:4 };
   const badge = BADGES.find(b => b.id === id);
   if (!badge) return;
-  const current = S.badgeTiers[id] || null;
-  if (current && RANK[current] >= RANK[tier]) return;
-  S.badgeTiers[id] = tier;
+  if (tier) {
+    // Challenge tier badge — upgrade-only
+    const current = S.badgeTiers[id] || null;
+    if (current && RANK[current] >= RANK[tier]) return;
+    S.badgeTiers[id] = tier;
+  } else {
+    // Non-tier badge — already earned check
+    if (S.badges.includes(id)) return;
+  }
   if (!S.badges.includes(id)) S.badges.push(id);
   saveBadges();
-  const medals = { bronze:'🥉 Bronze', silver:'🥈 Silver', gold:'🥇 Gold', platinum:'🏆 Platinum' };
-  const labels = { bronze:'Foundation complete', silver:'Level Up complete', gold:'Go Further complete', platinum:'All 10 shots complete' };
-  showBanner(`${medals[tier]} badge: ${badge.name} — ${labels[tier]}!`, tier === 'platinum' ? 'gold' : tier, 5000);
+  if (tier) {
+    const medals = { bronze:'🥉 Bronze', silver:'🥈 Silver', gold:'🥇 Gold', platinum:'🏆 Platinum' };
+    const labels = { bronze:'Foundation complete', silver:'Level Up complete', gold:'Go Further complete', platinum:'All 20 shots complete' };
+    showBanner(`${medals[tier]} badge: ${badge.name} — ${labels[tier]}!`, tier === 'platinum' ? 'gold' : tier, 5000);
+  } else {
+    showBanner(`🏅 Badge unlocked: ${badge.name}!`, 'success', 4000);
+  }
 }
 
 function checkSeasonalBadge(id) {
