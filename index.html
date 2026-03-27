@@ -1070,6 +1070,21 @@ input[type=range]::-moz-range-thumb {
 .shot-section[data-section="Go Further"] .shot-section-hdr-title  { color: #60a5fa; }
 .shot-section[data-section="Your Shots"] .shot-section-hdr-title  { color: #c084fc; }
 
+/* ── Completion card ── */
+.completion-card {
+  background: linear-gradient(135deg, rgba(0,71,187,0.15), rgba(168,85,247,0.1));
+  border: 1px solid rgba(0,71,187,0.35);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  margin: 16px 0 8px;
+  text-align: center;
+  animation: fadeUp 0.4s ease both;
+}
+.completion-card-icon  { font-size: 36px; margin-bottom: 8px; }
+.completion-card-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+.completion-card-body  { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.completion-card-body strong { color: var(--text); }
+
 /* ── School animations ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
@@ -1244,6 +1259,34 @@ const LESSONS = [
       { kind:'tip', body:'The wide-medium-close principle applies within every section too. For "arrival": wide exterior, medium entrance crowd, close badge lanyard detail. Those three shots alone cut into a 10-second arrival sequence.' },
       { kind:'why', body:'Most event videos fail not because the shots are bad, but because they\'re random. Establishing → Reaction → Detail is a sequence your brain is wired to follow. Give editors this structure and they\'ll use every clip you give them.' },
       { kind:'bullets', items:['Always shoot the arrival and departure — beginnings and endings are the hardest to recreate','Get at least one wide, one medium, and one close for every location you shoot','Reaction shots (people listening, laughing, clapping) are worth 10x their weight — get more','Aim to shoot 3 distinct "locations" even at a small event: exterior, registration, main room'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'after-the-shoot', shotType: null, icon: '✂️',
+    title: 'After the Shoot',
+    subtitle: 'Record your script and edit it together in CapCut',
+    blocks: [
+      { kind:'text', body:'You\'ve captured your b-roll. Now two things remain: record a short on-camera script, and cut it all together in a mobile editing app. With CapCut, this takes 20–30 minutes — even for first-timers.' },
+      { kind:'tip', body:'The app: CapCut. Free on iPhone and Android. It handles multi-track editing, auto-captions, and export in one place. No desktop required.' },
+      { kind:'text', body:'Step 1 — Record your script. Find a quiet spot with a window in front of you (light on your face, not behind you). Keep it short: 45–90 seconds max. Speak naturally — a slightly imperfect take with good energy beats a flat perfect one.' },
+      { kind:'bullets', items:[
+        'Hold your phone at eye level or slightly above — never below chin',
+        'Face a window or lamp — never shoot with light behind you',
+        'Speak slower than feels natural. It always sounds better on camera.',
+        'Record at least 3 takes and pick the one with the most energy',
+        'Bullet points beat a memorised script — just hit your key ideas',
+      ]},
+      { kind:'why', body:'Your face only needs to be on screen for the opening ~10 seconds and a few key moments. The b-roll will cover the rest — so a slightly rough take is completely fine.' },
+      { kind:'text', body:'Step 2 — Edit in CapCut. Create a new project and add your talking head clip first as the main track. Then import your b-roll clips and lay them on top.' },
+      { kind:'bullets', items:[
+        'Trim your talking head first — cut out pauses and stumbles',
+        'Place b-roll clips over sections where they match what you\'re saying',
+        'Leave your face visible for the first and last few seconds',
+        'Use CapCut\'s auto-caption tool to add subtitles in one tap',
+        'Export at 1080p and share directly or save to your camera roll',
+      ]},
+      { kind:'tip', body:'Match b-roll to words: if you say "the keynote hall," show the wide room shot. If you say "the energy in the crowd," show the slow-mo applause clip. Editors call this "covering your track."' },
     ],
     gyro: false, gyroAxis: null, gyroLabel: null,
   },
@@ -3045,6 +3088,13 @@ function renderChecklist() {
   <div class="shot-list" id="shot-list">
     ${sectionHtml}
   </div>
+
+  ${!S.reorderMode && done === total && total > 0 ? `<div class="completion-card">
+    <div class="completion-card-icon">🎉</div>
+    <div class="completion-card-title">All shots captured!</div>
+    <div class="completion-card-body">Record a 45–90 second talking head, then cut everything together in <strong>CapCut</strong> — free on iPhone and Android.</div>
+    <button class="btn btn-primary btn-full" onclick="goToLesson('after-the-shoot')" style="margin-top:12px">✂️ Read the editing guide →</button>
+  </div>` : ''}
 
   ${S.reorderMode ? '' : `<div id="add-section-area">${addSectionAreaHtml()}</div>`}
 
