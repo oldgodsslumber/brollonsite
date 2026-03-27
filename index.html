@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>B-Roll Planner · Pega Events</title>
+<title>Film Kit</title>
 <style>
 /* ── RESET & CSS VARIABLES ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1070,6 +1070,33 @@ input[type=range]::-moz-range-thumb {
 .shot-section[data-section="Go Further"] .shot-section-hdr-title  { color: #60a5fa; }
 .shot-section[data-section="Your Shots"] .shot-section-hdr-title  { color: #c084fc; }
 
+/* ── Stretch pill ── */
+.stretch-pill { display:inline-block; background:rgba(245,158,11,0.18); color:#f59e0b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:4px; padding:1px 5px; margin-left:5px; vertical-align:middle; }
+
+/* ── Video type pill ── */
+.type-pill { display:inline-block; background:rgba(255,255,255,0.07); color:var(--muted); font-size:10px; border-radius:4px; padding:1px 5px; margin-left:2px; vertical-align:middle; }
+
+/* ── Type select (new project form) ── */
+.type-select-pill { display:inline-flex; align-items:center; gap:8px; background:var(--surf2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 12px; font-size:14px; color:var(--muted); cursor:default; }
+.type-coming-soon { font-size:10px; background:rgba(0,71,187,0.18); color:var(--accent); border-radius:3px; padding:1px 6px; }
+
+/* ── Segmented button group ── */
+.seg-group { display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+.seg-btn { flex:1; min-width:80px; padding:8px 10px; background:var(--surf2); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--muted); font-size:13px; cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+.seg-btn.active { background:rgba(0,71,187,0.2); border-color:var(--accent); color:var(--text); }
+.seg-btn:hover:not(.active) { background:var(--surf3); color:var(--text); }
+
+/* ── Script card ── */
+.script-card { background:var(--surf); border:1px solid rgba(0,71,187,0.3); border-left:3px solid var(--accent); border-radius:var(--radius); padding:16px; margin:16px 0 8px; animation:fadeUp 0.4s ease both; }
+.script-card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.script-card-title { font-size:14px; font-weight:700; color:var(--text); }
+.script-card-body { font-size:14px; line-height:1.7; color:var(--muted); }
+.script-card-body p { margin-bottom:.75em; }
+.script-card-body p:last-child { margin-bottom:0; }
+
+/* ── Checklist type label ── */
+.checklist-type-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:2px; margin-bottom:4px; }
+
 /* ── Completion card ── */
 .completion-card {
   background: linear-gradient(135deg, rgba(0,71,187,0.15), rgba(168,85,247,0.1));
@@ -1406,7 +1433,7 @@ const CHALLENGES = [
   {
     meta: { title:'The Office', tagline:'Turn your everyday workspace into a film set', icon:'🏢', badgeId:'office-explorer', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-office-v1', name: 'Challenge: The Office', isChallenge: true, badgeId: 'office-explorer',
+      id: 'challenge-office-v1', name: 'Challenge: The Office', isChallenge: true, badgeId: 'office-explorer', videoType: 'experience-coverage',
       event: 'The Office', location: 'Your Workplace', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1436,7 +1463,7 @@ const CHALLENGES = [
   {
     meta: { title:'The Commute', tagline:'Find the cinema in your daily journey', icon:'🚇', badgeId:'commuter', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-commute-v1', name: 'Challenge: The Commute', isChallenge: true, badgeId: 'commuter',
+      id: 'challenge-commute-v1', name: 'Challenge: The Commute', isChallenge: true, badgeId: 'commuter', videoType: 'experience-coverage',
       event: 'The Commute', location: 'Transit & Streets', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1466,7 +1493,7 @@ const CHALLENGES = [
   {
     meta: { title:'The Lobby', tagline:'Find the architecture hiding in plain sight', icon:'⭐', badgeId:'welcome-crew', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-lobby-v1', name: 'Challenge: The Lobby', isChallenge: true, badgeId: 'welcome-crew',
+      id: 'challenge-lobby-v1', name: 'Challenge: The Lobby', isChallenge: true, badgeId: 'welcome-crew', videoType: 'experience-coverage',
       event: 'The Lobby', location: 'Building Lobby', topic: 'B-Roll School Challenge', duration: 90, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1496,7 +1523,7 @@ const CHALLENGES = [
   {
     meta: { title:'The Park', tagline:'Find the film hiding in your nearest green space', icon:'🌳', badgeId:'park-ranger', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-park-v1', name: 'Challenge: The Park', isChallenge: true, badgeId: 'park-ranger',
+      id: 'challenge-park-v1', name: 'Challenge: The Park', isChallenge: true, badgeId: 'park-ranger', videoType: 'experience-coverage',
       event: 'The Park', location: 'A Park Near You', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1526,7 +1553,7 @@ const CHALLENGES = [
   {
     meta: { title:'City Streets', tagline:'Your city has been a film set all along', icon:'🏙️', badgeId:'city-wanderer', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-city-v1', name: 'Challenge: City Streets', isChallenge: true, badgeId: 'city-wanderer',
+      id: 'challenge-city-v1', name: 'Challenge: City Streets', isChallenge: true, badgeId: 'city-wanderer', videoType: 'experience-coverage',
       event: 'City Streets', location: 'Your City', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1556,7 +1583,7 @@ const CHALLENGES = [
   {
     meta: { title:'The Café', tagline:'Rain or shine, anywhere in the world', icon:'☕', badgeId:'coffee-break', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-cafe-v1', name: 'Challenge: The Café', isChallenge: true, badgeId: 'coffee-break',
+      id: 'challenge-cafe-v1', name: 'Challenge: The Café', isChallenge: true, badgeId: 'coffee-break', videoType: 'experience-coverage',
       event: 'The Café', location: 'A Café Near You', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1586,7 +1613,7 @@ const CHALLENGES = [
   {
     meta: { title:'Golden Hour', tagline:'Go outside 30 minutes before sunset — anywhere on Earth', icon:'🌅', badgeId:'golden-hour', difficulty:'Progressive', shotCount:20 },
     project: {
-      id: 'challenge-golden-v1', name: 'Challenge: Golden Hour', isChallenge: true, badgeId: 'golden-hour',
+      id: 'challenge-golden-v1', name: 'Challenge: Golden Hour', isChallenge: true, badgeId: 'golden-hour', videoType: 'experience-coverage',
       event: 'Golden Hour', location: 'Wherever You Are', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 2,
       sections: ['Foundation','Level Up','Go Further','Your Shots'],
       shots: [
@@ -1760,6 +1787,7 @@ function loadLessonsRead() {
 ────────────────────────────────────────── */
 function generateId() { return 'id-' + Math.random().toString(36).slice(2,9); }
 function countDone()  { return S.project ? S.project.shots.filter(s => s.completed).length : 0; }
+function copyScript() { if (S.project?.script) navigator.clipboard.writeText(S.project.script).then(()=>showBanner('Script copied to clipboard!','success',2500)); }
 
 /* Extract ordered section names from a shots array (preserving first-seen order) */
 function extractSections(shots) {
@@ -1842,10 +1870,10 @@ function updateHeader() {
   const showBack     = S.screen !== 'home';
   const isChecklist = S.screen === 'checklist' && S.project;
   const lessonTitle = S.lessonId ? (LESSONS.find(l=>l.id===S.lessonId)?.title || 'Lesson') : 'Lesson';
-  const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder', school: '🎬 B-Roll School', lesson: esc(lessonTitle) };
+  const titles = { home:'<span class="blue">Film</span> Kit', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder', school: '🎬 School', lesson: esc(lessonTitle) };
   h.innerHTML = `<div class="hdr-inner">
     ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
-    <div class="hdr-title">${titles[S.screen]||'B-Roll Planner'}</div>
+    <div class="hdr-title">${titles[S.screen]||'Film Kit'}</div>
     ${isChecklist ? `<button class="hdr-btn" onclick="toggleReorderMode()" title="${S.reorderMode ? 'Done reordering' : 'Edit shot order'}" style="${S.reorderMode ? 'color:var(--accent)' : ''}">${S.reorderMode ? 'Done' : '⠿'}</button>` : ''}
     ${isChecklist && !S.reorderMode ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
   </div>`;
@@ -1964,7 +1992,7 @@ function lensPromptHint() {
    CLAUDE API
 ────────────────────────────────────────── */
 function buildSystemPrompt() {
-  return `You are an expert videographer and b-roll consultant for corporate event and convention coverage. You help Pega employees create compelling short videos for social media and internal use.
+  return `You are an expert videographer and creative director helping people capture compelling short-form video content for professional social media — primarily LinkedIn. You specialise in experience coverage: events, conferences, trips, and live moments.
 
 B-ROLL SHOT TYPES AVAILABLE:
   static     – Camera completely locked off, no movement
@@ -2009,21 +2037,47 @@ SHOT ORDERING (follow this arc — order shots within each section logically):
 
 SHOT COUNT: Generate EXACTLY Math.round(durationSeconds / 4) shots. Example: 60s → 15 shots, 30s → 8 shots.
 
+STRETCH SHOTS (REQUIRED):
+  The last 1–2 shots in your list must be creative "stretch" shots that push the user's eye without requiring special apps or modes. Use only native types: static, pan, tilt, tracking, zoom — never hyperlapse or timelapse.
+  Scale by skill: Beginner = unusual static framing; Intermediate = pan/tilt through foreground; Advanced = sustained candid zoom or tracking through foreground.
+  Good stretch shot ideas (do not copy verbatim — adapt to the specific event/location):
+    - Shot framed through a foreground object: glass, plant, arm, doorframe, crowd gap
+    - Reflection in a window, polished floor, phone screen, or sunglasses
+    - Ground-level looking straight up at people walking past
+    - Extreme close-up of texture or detail: badge lanyard, coffee cup rim, embroidered logo
+    - Candid reaction shot at full zoom from across the room, subjects unaware
+  Mark stretch shots with "stretch": true. All other shots get "stretch": false.
+
 OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary. No extra whitespace. Schema:
-{"projectName":"string","shots":[{"id":"shot-1","type":"string","section":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false}]}
+{"projectName":"string","script":"string","shots":[{"id":"shot-1","type":"string","section":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false,"stretch":false}]}
   - section: one of the 7 section names above (required)
   - app: null or "Mimo" (for hyperlapse/timelapse only)
-  - fps: null or "60" or "120" (for slow-mo only)`;
+  - fps: null or "60" or "120" (for slow-mo only)
+  - stretch: true only for the last 1–2 shots; false for all others
+
+SCRIPT GENERATION:
+  The "script" field is a 60–90 second talking head script for LinkedIn. Rules:
+  - Open with a hook — an observation, a question, or a surprising detail. NEVER start with "Hey everyone" or introduce yourself.
+  - Tone guide: professional = measured, 2–3 sharp insights; excited = high energy, personal highlights; personal = candid, honest, relatable moment
+  - Role guide: attendee → lead with what you learned; speaker → lead with what you shared; organiser → lead with what the event was designed to achieve; exhibitor → lead with the problem you solve
+  - Length: 3–5 short paragraphs, each 2–3 sentences. No bullet points.
+  - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption
+  - Close with a soft call to action — a thought-provoking question or a next-steps nudge
+  - Write in first person, natural spoken cadence, punctuated for breath pauses
+  - If no takeaway was provided, infer a strong professional angle from the event topic`;
 }
 
 function buildUserMessage(newDir) {
-  const { eventName, eventLocation, topic, duration, skillLevel } = S.form;
+  const { eventName, eventLocation, topic, duration, skillLevel, role, takeaway, tone } = S.form;
   const level = SKILL_LABELS[skillLevel];
   const date  = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
   const lens  = lensPromptHint();
   const shotCount = Math.round(duration / 4);
 
   const fullEvent = eventLocation ? `${eventName} in ${eventLocation}` : eventName;
+  const roleLine    = role    ? `Role: ${role}.` : '';
+  const takeLine    = takeaway?.trim() ? `Key takeaway: "${takeaway.trim()}".` : '';
+  const toneLine    = tone    ? `Script tone: ${tone}.` : '';
 
   if (newDir) {
     const done   = S.project.shots.filter(s => s.completed);
@@ -2038,10 +2092,10 @@ ${JSON.stringify(undone.map(s=>({id:s.id,type:s.type,title:s.title})))}
 
 NEW DIRECTION from the user: "${newDir}"
 
-Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new direction. Total shot count should still be approximately ${shotCount}. Return the same JSON schema.`;
+Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new direction. Total shot count should still be approximately ${shotCount}. Return the same JSON schema including the script field.`;
   }
 
-  return `Create a b-roll shot list for a ${duration}-second video (${shotCount} shots) about "${topic}" at ${fullEvent}. Skill level: ${level}. Date: ${date}.${lens}
+  return `Create a shot list and talking head script for a ${duration}-second experience coverage video (${shotCount} shots) about "${topic}" at ${fullEvent}. Skill level: ${level}. Date: ${date}. ${roleLine} ${takeLine} ${toneLine}${lens}
 
 Suggested projectName format: "${eventName.trim().replace(/\s+/g,'-')}-${new Date().toISOString().slice(0,10)}"`;
 }
@@ -2104,6 +2158,11 @@ async function callClaude(newDir) {
           topic:      S.form.topic,
           duration:   S.form.duration,
           skillLevel: S.form.skillLevel,
+          videoType:  S.form.videoType,
+          role:       S.form.role,
+          takeaway:   S.form.takeaway,
+          tone:       S.form.tone,
+          script:     parsed.script || null,
           shots:      parsed.shots,
           sections:   extractSections(parsed.shots),
         };
@@ -2155,7 +2214,7 @@ function onFileLoad(input) {
   reader.onload = e => {
     try {
       const p = JSON.parse(e.target.result);
-      if (!p.id || !Array.isArray(p.shots)) throw new Error('Not a valid B-Roll Planner file.');
+      if (!p.id || !Array.isArray(p.shots)) throw new Error('Not a valid Film Kit project file.');
       const idx = S.projects.findIndex(x => x.id === p.id);
       if (idx >= 0) S.projects[idx] = p; else S.projects.unshift(p);
       S.project = p;
@@ -2732,14 +2791,15 @@ function renderHome() {
   if (!S.projects.length) {
     return `<div class="empty-state">
       <div class="empty-icon">🎬</div>
-      <h2>Ready to roll?</h2>
-      <p>Create your first b-roll shot list for an upcoming Pega event and start shooting like a pro.</p>
+      <h2>Ready to shoot?</h2>
+      <p>Create your first shot list and start capturing footage that tells a real story.</p>
     </div>
     <div class="home-actions">
       <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
       <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
-      <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 B-Roll School</button>
+      <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 School</button>
+      <button class="btn btn-ghost btn-full" onclick="window.open('editor.html','_blank')">🎞 Video Editor</button>
     </div>`;
   }
 
@@ -2750,7 +2810,7 @@ function renderHome() {
       <div class="project-card-main" onclick="openProject('${p.id}')">
         <div class="project-card-info">
           <div class="project-name">${esc(p.name||'Untitled Project')}</div>
-          <div class="project-meta">${esc(p.event||'')} · ${p.shots.length} shots</div>
+          <div class="project-meta">${esc(p.event||'')} · ${p.shots.length} shots${p.videoType ? ` · <span class="type-pill">${esc(p.videoType==='experience-coverage'?'Experience Coverage':p.videoType)}</span>` : ''}</div>
           <div class="mini-progress-track"><div class="mini-progress-fill" style="width:${pct}%"></div></div>
           <div class="project-pct">${pct}% complete</div>
         </div>
@@ -2770,7 +2830,8 @@ function renderHome() {
       <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
       <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
-      <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 B-Roll School</button>
+      <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 School</button>
+      <button class="btn btn-ghost btn-full" onclick="window.open('editor.html','_blank')">🎞 Video Editor</button>
     </div>`;
 }
 
@@ -2947,7 +3008,7 @@ function builderSave() {
    SCREEN: NEW PROJECT
 ────────────────────────────────────────── */
 function startNew() {
-  S.form = { eventName:'', eventLocation:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false };
+  S.form = { eventName:'', eventLocation:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false, role:'attendee', takeaway:'', tone:'professional', videoType:'experience-coverage' };
   S.lensProfile = null;
   goTo('new');
   detectLenses(); /* async — updates badge when ready */
@@ -2968,8 +3029,15 @@ function autoName() {
 
 function renderNew() {
   const durIdx = Math.max(0, DURATION_OPTS.indexOf(S.form.duration));
+  const roles = [['attendee','Attendee'],['speaker','Speaker'],['organiser','Organiser'],['exhibitor','Exhibitor']];
+  const tones = [['professional','Thoughtful & Professional'],['excited','Energetic & Excited'],['personal','Candid & Personal']];
   return `<div>
     <div class="screen-title">New Project</div>
+
+    <div class="form-group">
+      <label>Video type</label>
+      <div class="type-select-pill">Experience Coverage <span class="type-coming-soon">More types coming soon</span></div>
+    </div>
 
     <div class="form-group">
       <label>Event name</label>
@@ -2988,8 +3056,30 @@ function renderNew() {
     <div class="form-group">
       <label>What is the video about?</label>
       <input type="text" id="f-topic" value="${esc(S.form.topic)}"
-             placeholder="e.g. How fun the trip was"
+             placeholder="e.g. Insights from the AI track at PegaWorld"
              oninput="S.form.topic=this.value" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>Your role at this event</label>
+      <div class="seg-group">
+        ${roles.map(([v,l])=>`<button class="seg-btn${S.form.role===v?' active':''}" onclick="S.form.role='${v}';render()">${l}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>One thing viewers should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
+      <input type="text" id="f-takeaway" value="${esc(S.form.takeaway)}"
+             placeholder="e.g. Automation doesn't replace people — it changes what they focus on"
+             maxlength="140"
+             oninput="S.form.takeaway=this.value" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label>Tone for your talking head</label>
+      <div class="seg-group">
+        ${tones.map(([v,l])=>`<button class="seg-btn${S.form.tone===v?' active':''}" onclick="S.form.tone='${v}';render()">${l}</button>`).join('')}
+      </div>
     </div>
 
     <div class="form-group">
@@ -3073,10 +3163,12 @@ function renderChecklist() {
     ? customFormHtml()
     : `<button class="btn btn-ghost add-custom-btn" onclick="showCustomForm()">＋ Add Shot</button>`;
 
+  const typeLabel = S.project.videoType === 'experience-coverage' ? 'Experience Coverage' : (S.project.videoType || '');
   return `<div class="checklist-hdr">
     <span class="proj-title-edit" contenteditable="true" role="textbox"
           oninput="S.project.name=this.textContent.trim();saveProjects();updateHeader()"
           >${esc(S.project.name||'Untitled')}</span>
+    ${typeLabel ? `<div class="checklist-type-label">${esc(typeLabel)}</div>` : ''}
     <div id="progress-label" class="progress-label">${done}/${total} shots · ${pct}%</div>
     <div class="progress-track"><div id="progress-fill" class="progress-fill" style="width:${pct}%"></div></div>
   </div>
@@ -3089,6 +3181,14 @@ function renderChecklist() {
   <div class="shot-list" id="shot-list">
     ${sectionHtml}
   </div>
+
+  ${!S.reorderMode && S.project.script ? `<div class="script-card">
+    <div class="script-card-hdr">
+      <span class="script-card-title">🎙 Your Talking Head Script</span>
+      <button class="btn btn-ghost btn-sm" onclick="copyScript()">Copy</button>
+    </div>
+    <div class="script-card-body"><p>${esc(S.project.script).replace(/\n\n+/g,'</p><p>').replace(/\n/g,'<br>')}</p></div>
+  </div>` : ''}
 
   ${!S.reorderMode && done === total && total > 0 ? `<div class="completion-card">
     <div class="completion-card-icon">🎉</div>
@@ -3124,7 +3224,7 @@ function shotCardHtml(shot) {
     ${handle}
     <div class="check-circle">${shot.completed ? '✓' : ''}</div>
     <div class="shot-info">
-      <div class="shot-type-badge">${type.icon} ${type.label}${fps}${mimo}</div>
+      <div class="shot-type-badge">${type.icon} ${type.label}${fps}${mimo}${shot.stretch ? '<span class="stretch-pill">Stretch</span>' : ''}</div>
       <div class="shot-title">${esc(shot.title)}</div>
     </div>
     ${info}
