@@ -950,6 +950,76 @@ input[type=range]::-moz-range-thumb {
 .ban-danger  { background: var(--danger);  color: #fff; }
 .ban-success { background: var(--success); color: #fff; }
 .ban-info    { background: var(--surf2);   color: var(--text); border: 1px solid var(--border); }
+.ban-gold    { background: #92400e; color: #fde68a; }
+
+/* ── B-ROLL SCHOOL ── */
+.school-hero { text-align: center; padding: 20px 8px 4px; }
+.school-hero h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.school-hero p { color: var(--muted); font-size: 15px; line-height: 1.5; }
+.section-label {
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 10px;
+}
+.lesson-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px;
+}
+.lesson-card {
+  background: var(--surf); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 12px;
+  cursor: pointer; transition: border-color .15s, transform .1s;
+  display: flex; flex-direction: column; gap: 4px; position: relative;
+}
+.lesson-card:active { transform: scale(0.98); }
+.lesson-card.read { border-color: rgba(0,71,187,0.45); }
+.lesson-icon { font-size: 26px; line-height: 1; margin-bottom: 4px; }
+.lesson-title { font-size: 13px; font-weight: 700; line-height: 1.3; }
+.lesson-subtitle { font-size: 11px; color: var(--muted); line-height: 1.3; }
+.gyro-badge {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 9px; font-weight: 700;
+  background: rgba(0,71,187,0.2); color: #60a5fa;
+  border-radius: 20px; padding: 2px 5px;
+  border: 1px solid rgba(0,71,187,0.35);
+}
+.read-check { position: absolute; bottom: 7px; right: 9px; font-size: 13px; color: var(--success); }
+.challenge-section, .starter-section { margin-top: 20px; }
+.challenge-card, .starter-card {
+  background: var(--surf); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 10px;
+}
+.challenge-card-header, .starter-card-header {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px;
+}
+.challenge-icon, .starter-icon { font-size: 32px; line-height: 1; flex-shrink: 0; }
+.challenge-title, .starter-title { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
+.challenge-tagline, .starter-desc { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.challenge-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.skill-pill {
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+}
+.skill-pill.beginner     { background: rgba(34,197,94,0.15);  color: #4ade80; }
+.skill-pill.intermediate { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.skill-pill.advanced     { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.badge-preview-wrap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.badge-preview-wrap svg { width: 28px; height: 28px; flex-shrink: 0; }
+/* Lesson screen */
+.lesson-anim-wrap {
+  background: var(--surf); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 20px;
+}
+.lesson-blocks { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.lesson-text { font-size: 15px; line-height: 1.65; color: var(--text); }
+.lesson-bullets { list-style: disc; padding-left: 22px; }
+.lesson-bullets li { font-size: 14px; line-height: 1.65; margin-bottom: 4px; }
+/* Badge grid */
+.badge-section { margin-top: 24px; margin-bottom: 16px; }
+.badge-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px 10px; }
+.badge-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.badge-svg { width: 56px; height: 56px; color: var(--muted); transition: filter .3s, color .3s, opacity .3s; }
+.badge-svg.earned { color: var(--accent); filter: drop-shadow(0 0 7px rgba(0,71,187,0.55)); }
+.badge-svg.locked { opacity: 0.28; filter: grayscale(1); }
+.badge-name { font-size: 10px; font-weight: 600; text-align: center; color: var(--muted); line-height: 1.2; }
+.badge-name.earned-name { color: var(--text); }
 </style>
 </head>
 <body>
@@ -984,6 +1054,334 @@ const SHOT_TYPES = {
   'zoom':       { icon: '🔍', label: 'Zoom',        what: 'Move physically closer to your subject, or use an optical zoom lens if available on your phone.' },
   'custom':     { icon: '✏️', label: 'Custom',      what: 'Your own creative shot idea — make it uniquely yours.' },
 };
+
+/* ──────────────────────────────────────────
+   SCHOOL DATA
+────────────────────────────────────────── */
+const LESSONS = [
+  {
+    id: 'what-is-broll', shotType: null, icon: '🎬',
+    title: 'What is B-Roll?', subtitle: 'The footage that makes everything better',
+    blocks: [
+      { kind:'text', body:'B-roll is all the supporting footage that plays over a narrator or interview — the shots that show the audience what\'s being talked about. When a presenter says "we had 5,000 people at PegaWorld," b-roll is the wide shot of the packed hall that makes you believe it.' },
+      { kind:'tip', body:'The rule: every 4 seconds of talking needs a b-roll shot to cut to. If you shoot 15 good b-roll clips at an event, an editor can build an entire highlight video around them.' },
+      { kind:'text', body:'Think in three distances: wide shots establish where we are, medium shots show what\'s happening, close shots reveal the telling details. A great b-roll sequence moves between all three.' },
+      { kind:'why', body:'Most phones shoot in 1080p or 4K today. The thing holding event videos back isn\'t quality — it\'s variety. A dozen steady, well-composed b-roll shots are worth more than an hour of shaky walking footage.' },
+      { kind:'bullets', items:['Hold every shot for at least 3–5 seconds — editors need the breathing room','Shoot more than you think you need — coverage wins','Vary your distance: wide, medium, close','Keep your phone horizontal (landscape) unless the platform is Instagram Stories'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'static', shotType: 'static', icon: '🔒',
+    title: 'The Static Shot', subtitle: 'Lock it off and let the world move',
+    blocks: [
+      { kind:'text', body:'A static shot is a completely locked-off camera with zero movement. It sounds boring, but it\'s actually the foundation of professional-looking video. When everything else moves — people, light, sound — a still camera gives the viewer a stable anchor.' },
+      { kind:'tip', body:'Free tripod technique: lock your elbows tight against your ribcage, grip your phone with both hands, and press it gently against your forehead or chest. You become the tripod.' },
+      { kind:'text', body:'Static shots work brilliantly for: architectural details, event signage, crowds flowing through a space, and anywhere with existing movement in the scene — escalators, revolving doors, people walking past.' },
+      { kind:'why', body:'The 3–5 second rule matters most for static shots. Your body is never truly still — micro-movements add up. Hold for 5 seconds to guarantee the editor has 3 clean, usable seconds in the middle.' },
+      { kind:'bullets', items:['Lock elbows to ribcage or brace against a wall or pillar','Hold for a full 5 seconds before moving','Find scenes where something else is moving — makes the locked camera feel intentional','Portrait orientation is fine for static close-up details'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'pan', shotType: 'pan', icon: '↔',
+    title: 'The Pan Shot', subtitle: 'Smooth horizontal sweeps that reveal context',
+    blocks: [
+      { kind:'text', body:'A pan is a horizontal camera movement — rotating left to right or right to left to reveal a scene. The pan tells the viewer: "look at how wide this is" or "here\'s what\'s next to that."' },
+      { kind:'tip', body:'Pivot from your hips, not your wrists. Plant your feet shoulder-width apart, hold the phone with both hands, then rotate your whole upper body. Your wrists should stay locked — the movement comes from your core.' },
+      { kind:'text', body:'Pan speed guide: for a room or crowd, aim for about 10 seconds to cross the full scene. For a sign or smaller subject, 3–4 seconds. If you can count "one-Mississippi" per foot of scene, you\'re moving at roughly the right speed.' },
+      { kind:'why', body:'The most common pan mistake is starting and stopping while panning. Aim for one smooth, uninterrupted movement. Start recording before you begin panning, and keep going a full second after you stop.' },
+      { kind:'bullets', items:['Plant feet wide — pivot from hips, not wrists','Start and end on a stable, interesting frame — don\'t just sweep into nothing','Pan direction: left-to-right feels natural in Western cultures (reading direction)','Avoid panning during speech — cut to static to sync with words, pan during music'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'tilt', shotType: 'tilt', icon: '↕',
+    title: 'The Tilt Shot', subtitle: 'Vertical reveals that build drama',
+    blocks: [
+      { kind:'text', body:'A tilt is a vertical movement — sweeping your camera up or down. Tilt up to reveal something impressive in its full height. Tilt down for a more intimate, observational feel. The direction you choose carries meaning.' },
+      { kind:'tip', body:'Tilt up = impressive, awe-inspiring. Tilt down = following action, intimate. When shooting a speaker on a stage, tilt up slowly to reveal them — it makes them feel important before they\'ve said a word.' },
+      { kind:'text', body:'The classic tilt shot at events: stand outside the venue, start with your camera pointed at the pavement just in front of the entrance doors, then slowly tilt up to reveal the building in full. It\'s the cinematic establishing shot that signals "we\'re here."' },
+      { kind:'why', body:'Tilt shots work best with real vertical subjects: buildings, banners, people standing, escalators, staircases. Tilting across a flat, horizontal subject (like a conference table) usually looks awkward.' },
+      { kind:'bullets', items:['Start and end your tilt on a clear, intentional subject','Tilt at roughly 1 floor per 2 seconds for buildings','Keep your feet together and arms locked — tilt from the shoulders','Same pivot rule as panning: body movement, not wrist flick'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'tracking', shotType: 'tracking', icon: '🎯',
+    title: 'The Tracking Shot', subtitle: 'Follow the action with purpose',
+    blocks: [
+      { kind:'text', body:'A tracking shot means your camera moves through space — following a person, moving through a corridor, or walking into a scene. Done well, it\'s cinematic and immersive. Done poorly, it looks like someone ran to catch a bus.' },
+      { kind:'tip', body:'Bent-knee technique: slightly bend your knees and walk heel-to-toe, rolling through each step. This absorbs the bounce of walking and gives your footage that smooth, floating quality.' },
+      { kind:'text', body:'Two great tracking moves for events: walk alongside a subject at their pace (side tracking), or follow behind someone slightly, framing them in the center (over-the-shoulder). The over-the-shoulder is especially powerful for "walking into the venue" shots.' },
+      { kind:'why', body:'Keep tracking shots short — 5 to 8 seconds maximum. Longer, and the viewer starts to feel the instability. Use tracking for transitions: entering a space, following someone to a destination, moving through a crowd.' },
+      { kind:'bullets', items:['Bend your knees slightly and walk heel-to-toe for smooth movement','Pre-walk the path once before filming — know your obstacles','Stay 4–6 feet behind or beside your subject','Don\'t talk while tracking — your voice ruins the audio and distracts you'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'slow-mo', shotType: 'slow-mo', icon: '🐢',
+    title: 'Slow Motion', subtitle: 'Make the ordinary look extraordinary',
+    blocks: [
+      { kind:'text', body:'Slow motion is captured at a higher frame rate (60fps or 120fps) and played back at normal speed, making everything look smooth and dramatic. It transforms mundane moments — someone pouring coffee, hands clapping, a door opening — into something worth watching.' },
+      { kind:'tip', body:'On iPhone: Camera app → tap "1x" or swipe to "Slo-Mo". On Android: Open Camera → More → Slow Motion. 60fps is subtle and professional. 120fps is dramatic and cinematic. Both look great.' },
+      { kind:'text', body:'Best slow-mo subjects at events: crowd applause, handshakes, people laughing, liquid (coffee, water), confetti, flags or banners moving in wind, and any moment of genuine human connection. Avoid slow-mo for static scenes — there\'s nothing to slow down.' },
+      { kind:'why', body:'Slow motion buys you editing flexibility. A 4-second slow-mo clip of applause can stretch to fill 8 seconds of music, giving your editor room to breathe. Shoot more slow-mo than you think you need — it\'s the secret weapon of event coverage.' },
+      { kind:'bullets', items:['Set to slow-mo BEFORE the moment happens — you can\'t go back','60fps for subtle beauty, 120fps for dramatic effect','Best in good light — slow-mo in low light gets noisy','Every event has at least 5 great slow-mo moments: find them early'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'hyperlapse', shotType: 'hyperlapse', icon: '🚀',
+    title: 'Hyperlapse', subtitle: 'Walking sped up into fluid motion',
+    blocks: [
+      { kind:'text', body:'A hyperlapse is like a timelapse, but you\'re walking while filming. The Mimo app then dramatically speeds up your walking footage, turning a 3-minute walk through a conference hall into a 10-second flowing shot that makes the venue look massive.' },
+      { kind:'tip', body:'Use the Mimo app, not your phone\'s built-in hyperlapse. Mimo stabilises the footage as it speeds it up, smoothing out every step. Built-in hyperlapse looks jittery. Mimo looks cinematic.' },
+      { kind:'text', body:'Hyperlapse technique: walk in a straight line, keep the camera pointing consistently at your destination, hold your phone with both hands at chest height, and walk at your normal pace. Mimo does the rest. A minimum of 90 seconds of walking footage gives you enough material to work with.' },
+      { kind:'why', body:'Hyperlapses are the establishing shots of the future. Where a pan shows "here\'s the space," a hyperlapse shows "here\'s the scale." Use them for venue walk-throughs, crowd arrivals, and setup/teardown sequences.' },
+      { kind:'bullets', items:['Walk at least 90 seconds for a useful hyperlapse clip','Keep the camera pointed consistently — a wandering frame ruins it','Walk in straight lines or gentle curves, not zigzags','Mimo app: download free on iOS and Android before the event'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'timelapse', shotType: 'timelapse', icon: '⏱',
+    title: 'Timelapse', subtitle: 'Time passing in seconds',
+    blocks: [
+      { kind:'text', body:'A timelapse is filmed by locking your camera in one spot and letting time pass — the Mimo app captures frames at set intervals and assembles them into a fast-forward video. 10 minutes of setup and teardown becomes 15 seconds of compelling footage.' },
+      { kind:'tip', body:'Use the Mimo app\'s timelapse mode. Set your interval: 1 frame every 3 seconds for event setup, 1 every 5 seconds for slower scene changes. Lock your phone flat against a window ledge, prop it on a book, or find anything solid.' },
+      { kind:'text', body:'Best timelapse spots at events: the main stage from an empty hall before doors open (then crowds arrive), a busy registration desk from above, an outdoor entrance area at dawn with the city waking up, or a city view from a window with clouds and light changing.' },
+      { kind:'why', body:'Timelapse shots need 10–20 minutes of real time to produce 10–15 seconds of usable footage. Plan these in advance and start them early — a timelapse of the room filling up is worth more than any single shot you could take when it\'s full.' },
+      { kind:'bullets', items:['Lock your phone completely still — any movement ruins a timelapse','Start early: a 20-minute setup is a 30-second timelapse','Mimo app gives better stabilisation than native timelapse','Find interesting backgrounds: skylines, stages, crowds, cityscapes'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'zoom', shotType: 'zoom', icon: '🔍',
+    title: 'Zoom Shots', subtitle: 'Getting closer without moving your feet',
+    blocks: [
+      { kind:'text', body:'Zoom on a phone works in two ways: optical zoom (using physical lens glass — good quality) and digital zoom (just cropping the sensor — loses quality). On iPhones and modern Android flagships, the 2x or 3x lenses are optical. Beyond that, you\'re digital.' },
+      { kind:'tip', body:'The telephoto walk-back trick: switch to your 2x or 3x lens, then walk backwards until your subject is framed how you want. You get the compressed, professional telephoto look — subjects look closer to each other, backgrounds blur naturally.' },
+      { kind:'text', body:'Punch-in technique: film at your normal lens, then tap the number in the camera app to switch to 2x. Don\'t pinch-zoom with your fingers — that\'s always digital. Use the lens buttons.' },
+      { kind:'why', body:'Zoom shots are brilliant for candid crowd moments. From 15 feet away on a 3x lens, people don\'t know you\'re filming them — you get authentic expressions, genuine reactions, real conversations. That authenticity is gold.' },
+      { kind:'bullets', items:['Use the lens buttons (1x, 2x, 3x) — never pinch-to-zoom','Walk backwards with 2x zoom engaged for compressed background effect','Stabilise extra carefully — magnified lenses amplify camera shake','iPhone 15 Pro / Pro Max have 5x optical zoom — use it for speaker close-ups from the back of the room'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+  {
+    id: 'sequencing', shotType: null, icon: '📐',
+    title: 'Sequencing Your Shots', subtitle: 'How shots become stories',
+    blocks: [
+      { kind:'text', body:'A collection of great shots only becomes a great video when they\'re ordered to tell a story. Event coverage follows a natural narrative arc: the world before the event, the event building up, the event happening, and the world after.' },
+      { kind:'banner', body:'The universal event sequence: Arrival → Venue → Energy → Sessions → Human Moments → Departure' },
+      { kind:'text', body:'Arrival shots establish where we are and create anticipation. Venue shots show the scale and craft of the space. Energy shots capture crowd momentum — the moment people realise this is going to be great. Sessions are the product shots — the thing people actually came for. Human Moments are the real gold: laughter, reactions, connection. Departure shots close the story.' },
+      { kind:'tip', body:'The wide-medium-close principle applies within every section too. For "arrival": wide exterior, medium entrance crowd, close badge lanyard detail. Those three shots alone cut into a 10-second arrival sequence.' },
+      { kind:'why', body:'Most event videos fail not because the shots are bad, but because they\'re random. Establishing → Reaction → Detail is a sequence your brain is wired to follow. Give editors this structure and they\'ll use every clip you give them.' },
+      { kind:'bullets', items:['Always shoot the arrival and departure — beginnings and endings are the hardest to recreate','Get at least one wide, one medium, and one close for every location you shoot','Reaction shots (people listening, laughing, clapping) are worth 10x their weight — get more','Aim to shoot 3 distinct "locations" even at a small event: exterior, registration, main room'] },
+    ],
+    gyro: false, gyroAxis: null, gyroLabel: null,
+  },
+];
+
+/* Badge SVG helpers */
+function _badgeSvg(innerPaths) {
+  return `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="badge-svg">
+    <polygon points="32,3 58,18 58,46 32,61 6,46 6,18" stroke="currentColor" stroke-width="2.5"/>
+    ${innerPaths}
+  </svg>`;
+}
+
+const BADGES = [
+  { id:'first-shot',   name:'First Shot',    desc:'Checked off your very first shot', category:'production',
+    svg: _badgeSvg(`<rect x="17" y="25" width="30" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="17" y1="31" x2="47" y2="31" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="23" y1="25" x2="21" y2="31" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="29" y1="25" x2="27" y2="31" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="35" y1="25" x2="33" y2="31" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="41" y1="25" x2="39" y2="31" stroke="currentColor" stroke-width="1.5"/>`) },
+  { id:'full-roll',    name:'Full Roll',      desc:'Completed every shot in a project', category:'production',
+    svg: _badgeSvg(`<rect x="16" y="22" width="32" height="20" rx="2" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="16" y="22" width="5" height="5" stroke="currentColor" stroke-width="1"/>
+      <rect x="16" y="37" width="5" height="5" stroke="currentColor" stroke-width="1"/>
+      <rect x="43" y="22" width="5" height="5" stroke="currentColor" stroke-width="1"/>
+      <rect x="43" y="37" width="5" height="5" stroke="currentColor" stroke-width="1"/>
+      <polyline points="24,33 28,37 40,27" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`) },
+  { id:'shot-caller',  name:'Shot Caller',   desc:'Generated 5 AI shot lists', category:'production',
+    svg: _badgeSvg(`<polyline points="17,41 17,29 24,36 32,22 40,36 47,29 47,41" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <line x1="17" y1="41" x2="47" y2="41" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="32" cy="22" r="2" stroke="currentColor" stroke-width="1.5"/>`) },
+  { id:'first-lesson', name:'First Lesson',  desc:'Completed your first B-Roll School lesson', category:'learning',
+    svg: _badgeSvg(`<path d="M32 22 C32 22 21 19 15 24 L15 42 C21 38 32 41 32 41" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M32 22 C32 22 43 19 49 24 L49 42 C43 38 32 41 32 41" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="32" y1="22" x2="32" y2="41" stroke="currentColor" stroke-width="1.5"/>`) },
+  { id:'shot-scholar', name:'Shot Scholar',  desc:'Completed all 10 lessons', category:'learning',
+    svg: _badgeSvg(`<polygon points="32,20 49,28 32,36 15,28" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <polyline points="22,32 22,40 32,44 42,40 42,32" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <line x1="49" y1="28" x2="49" y2="37" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="49" cy="39" r="2.5" stroke="currentColor" stroke-width="1.5"/>`) },
+  { id:'shot-master',  name:'Shot Master',   desc:'Completed all 7 shot-type lessons', category:'learning',
+    svg: _badgeSvg(`<rect x="13" y="24" width="28" height="18" rx="3" stroke="currentColor" stroke-width="1.5"/>
+      <polyline points="41,29 51,25 51,37 41,33" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="27" cy="33" r="5" stroke="currentColor" stroke-width="1.5"/>`) },
+  { id:'office-explorer', name:'Office Explorer', desc:'Completed The Office challenge', category:'challenge',
+    svg: _badgeSvg(`<rect x="17" y="27" width="24" height="17" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="21" y="31" width="5" height="5" stroke="currentColor" stroke-width="1"/>
+      <rect x="32" y="31" width="5" height="5" stroke="currentColor" stroke-width="1"/>
+      <rect x="25" y="36" width="8" height="8" stroke="currentColor" stroke-width="1"/>
+      <line x1="41" y1="18" x2="41" y2="31" stroke="currentColor" stroke-width="1.5"/>
+      <polyline points="41,18 50,22 41,26" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`) },
+  { id:'commuter',     name:'Commuter',      desc:'Completed The Commute challenge', category:'challenge',
+    svg: _badgeSvg(`<rect x="18" y="22" width="28" height="22" rx="5" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="18" y1="31" x2="46" y2="31" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="25" cy="38" r="3" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="39" cy="38" r="3" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="22" y1="44" x2="20" y2="48" stroke="currentColor" stroke-width="1.5"/>
+      <line x1="42" y1="44" x2="44" y2="48" stroke="currentColor" stroke-width="1.5"/>`) },
+  { id:'welcome-crew', name:'Welcome Crew',  desc:'Completed The Lobby challenge', category:'challenge',
+    svg: _badgeSvg(`<circle cx="32" cy="32" r="12" stroke="currentColor" stroke-width="1.5"/>
+      <polygon points="32,22 34.4,29.2 42,29.2 35.8,33.8 38.2,41 32,36.4 25.8,41 28.2,33.8 22,29.2 29.6,29.2" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>`) },
+  { id:'steady-hands', name:'Steady Hands',  desc:'Passed the Static gyro practice', category:'practice',
+    svg: _badgeSvg(`<rect x="26" y="19" width="12" height="24" rx="3" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="32" cy="38" r="2" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M20 31 A12 12 0 0 1 32 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M44 31 A12 12 0 0 0 32 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M16 34 A16 16 0 0 1 32 15" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-dasharray="2 2"/>
+      <path d="M48 34 A16 16 0 0 0 32 15" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-dasharray="2 2"/>`) },
+  { id:'smooth-operator', name:'Smooth Operator', desc:'Passed the Pan gyro practice', category:'practice',
+    svg: _badgeSvg(`<line x1="13" y1="32" x2="51" y2="32" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <polyline points="45,27 51,32 45,37" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M17 26 Q22 21 27 26 Q32 31 37 26 Q42 21 47 26" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>`) },
+  { id:'vertical-climb', name:'Vertical Climb', desc:'Passed the Tilt gyro practice', category:'practice',
+    svg: _badgeSvg(`<line x1="32" y1="49" x2="32" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <polyline points="27,21 32,14 37,21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <polyline points="23,31 32,26 41,31" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <polyline points="23,38 32,33 41,38" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`) },
+];
+
+const CHALLENGES = [
+  {
+    meta: { title:'The Office', tagline:'Turn your everyday workspace into a film set', icon:'🏢', badgeId:'office-explorer', difficulty:'Beginner', shotCount:8 },
+    project: {
+      id: 'challenge-office-v1', name: 'Challenge: The Office', isChallenge: true, badgeId: 'office-explorer',
+      event: 'The Office', location: 'Your Workplace', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 1,
+      sections: ['Arrival & Exterior','The Space','People & Details'],
+      shots: [
+        { id:'co-1', type:'pan',     section:'Arrival & Exterior', title:'Pan across office entrance',         completed:false, custom:false, fps:null, app:null, duration:'4-6s', tip:'Pivot from your hips — not your wrists. Plant your feet shoulder-width apart.',             description:'Stand outside your building. Frame the entrance sign on the left, then smoothly sweep right to reveal the full entrance. Start recording, wait 1 second, then begin your pan.' },
+        { id:'co-2', type:'tilt',    section:'Arrival & Exterior', title:'Tilt up building exterior',          completed:false, custom:false, fps:null, app:null, duration:'5-7s', tip:'Lock your elbows against your ribcage and tilt from your shoulders, not your wrists.',      description:'Stand back from your building. Point your camera at ground level, then slowly tilt upward to reveal the building height. Take your time — 5 to 7 seconds.' },
+        { id:'co-3', type:'static',  section:'The Space',          title:'Wide static of open office floor',   completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Find a staircase landing or elevated spot. Lock your elbows to your ribs and hold for 5 full seconds.',  description:'Find an elevated position — a staircase landing or mezzanine — and capture a wide, completely locked-off shot of the office floor. Let the life of the space fill the frame.' },
+        { id:'co-4', type:'pan',     section:'The Space',          title:'Pan along row of desks',             completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'This should feel slow — about 2 seconds per desk. If it feels too slow, you\'re doing it right.', description:'Position yourself at one end of a desk row. Sweep slowly from left to right, capturing the rhythm of workstations and monitors. 6 to 8 seconds total.' },
+        { id:'co-5', type:'static',  section:'The Space',          title:'Floor-to-ceiling windows',           completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Portrait orientation works beautifully here — tall windows need tall framing.',          description:'Find your best floor-to-ceiling window. Lock your phone completely still. Let the natural light work. Try both landscape and portrait orientation and pick the best.' },
+        { id:'co-6', type:'tilt',    section:'People & Details',   title:'Tilt up to colleague at whiteboard', completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Ask your colleague\'s permission first. Start at the marker in their hand, tilt up to their face.',  description:'Ask a willing colleague if you can film a short clip. Start your tilt framed on the whiteboard at hand level, then slowly tilt up to their face. Warm and human.' },
+        { id:'co-7', type:'static',  section:'People & Details',   title:'Close-up: hands typing at keyboard', completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Get your camera 6-8 inches above the keyboard. The sound of keys adds texture to the footage.', description:'Hold your camera 6–8 inches above an active keyboard. Lock it completely still. The movement of hands and sound of keys tells a real, grounded story.' },
+        { id:'co-8', type:'tracking',section:'People & Details',   title:'Track alongside colleague in hallway',completed:false, custom:false, fps:null, app:null, duration:'5-7s', tip:'Bent knees, heel-to-toe walk. Stay 4–5 feet to the side of your subject at a 45-degree angle.', description:'Ask a colleague to walk down the hallway at their natural pace. Walk beside them with slightly bent knees, camera held at shoulder height. Stay parallel to their path.' },
+      ],
+    },
+  },
+  {
+    meta: { title:'The Commute', tagline:'Find the cinema in your daily journey', icon:'🚇', badgeId:'commuter', difficulty:'Beginner', shotCount:7 },
+    project: {
+      id: 'challenge-commute-v1', name: 'Challenge: The Commute', isChallenge: true, badgeId: 'commuter',
+      event: 'The Commute', location: 'Transit & Streets', topic: 'B-Roll School Challenge', duration: 60, skillLevel: 1,
+      sections: ['Getting There','Arrival'],
+      shots: [
+        { id:'cc-1', type:'static',  section:'Getting There', title:'Wide static of transit platform',       completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Lock your elbows to your ribs. Find the edges of the platform or tracks leading away — that leading line makes the frame.',  description:'Stand on the platform before the train or bus arrives. Frame the tracks or lane going into the distance. Hold completely still — let the world move around you.' },
+        { id:'cc-2', type:'pan',     section:'Getting There', title:'Pan as transit arrives',                completed:false, custom:false, fps:null, app:null, duration:'5-7s', tip:'Start your pan before the vehicle enters frame — anticipate the movement, don\'t chase it.', description:'Position yourself where you can see the transit arriving from a distance. As it approaches, smoothly pan to track its movement. Begin the pan one second before it enters your frame.' },
+        { id:'cc-3', type:'static',  section:'Getting There', title:'Window view — landscape blurring past', completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Press your phone gently against the glass. The glass stabilises the camera far better than holding it in the air.',         description:'Once seated or standing, press your phone gently against the window. The blurred landscape outside tells the story of motion. Hold for 5 full seconds.' },
+        { id:'cc-4', type:'static',  section:'Getting There', title:'Close static: hands, book or phone',   completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Small details anchor the viewer in real life. Get 6-8 inches away and hold completely still.',  description:'A close-up of what you\'re doing during your commute — reading, scrolling, holding a coffee. These micro-details ground the viewer in the everyday reality of the journey.' },
+        { id:'cc-5', type:'tilt',    section:'Arrival',       title:'Tilt up to building on arrival',        completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Stop walking before you tilt. Don\'t walk and tilt at the same time — plant your feet first.',  description:'As you approach your building, stop and frame the entrance at ground level. Slowly tilt upward to reveal the full building. Arriving somewhere should feel like a reveal.' },
+        { id:'cc-6', type:'static',  section:'Arrival',       title:'Detail: badge tap or door handle',      completed:false, custom:false, fps:null, app:null, duration:'4s',   tip:'Hold above the reader, tap, and stay locked still for 4 seconds after. The action is in the first second — the lingering shot gives the editor options.',  description:'Hold your camera above your badge reader or door handle. These small transitional moments are the invisible glue of a video — editors love a clean entrance detail.' },
+        { id:'cc-7', type:'pan',     section:'Arrival',       title:'Pan reveal: elevator doors opening',    completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Time your pan to the door speed — don\'t get ahead of the doors. The reveal is the whole point.',  description:'Stand in front of closed elevator doors. When they open, smoothly pan left or right to reveal what\'s inside or the corridor beyond. Time the pan to match the door opening speed.' },
+      ],
+    },
+  },
+  {
+    meta: { title:'The Lobby', tagline:'Find the architecture hiding in plain sight', icon:'⭐', badgeId:'welcome-crew', difficulty:'Intermediate', shotCount:9 },
+    project: {
+      id: 'challenge-lobby-v1', name: 'Challenge: The Lobby', isChallenge: true, badgeId: 'welcome-crew',
+      event: 'The Lobby', location: 'Building Lobby', topic: 'B-Roll School Challenge', duration: 90, skillLevel: 2,
+      sections: ['Exterior','The Lobby','People & Light'],
+      shots: [
+        { id:'cl-1', type:'tilt',    section:'Exterior',     title:'Wide tilt up from entrance',               completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'Stand further back than you think you need to. The taller the building, the further back. 6 to 8 seconds — take your time.',   description:'Stand well back from the building entrance. Frame the pavement at the very bottom of your shot. Slowly, steadily tilt upward to reveal the full building facade. This is your hero opening shot.' },
+        { id:'cl-2', type:'tracking',section:'Exterior',     title:'Revolving door tracking shot',             completed:false, custom:false, fps:null, app:null, duration:'5-7s', tip:'Bent knees, slow pace. Stay close to the door edge so you\'re moving parallel to the rotation.',  description:'Stand to one side of the revolving door. As people push through, walk with them from outside to inside (or reverse), keeping the door in frame. Bent knees — smooth movement.' },
+        { id:'cl-3', type:'pan',     section:'The Lobby',    title:'Pan across reception desk',                completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Human presence transforms a pan. If someone is at the desk, end your pan on their face — eyes always win.',  description:'Stand 3–4 metres from reception. Start frame right of the desk and pan slowly left across its full length. If there\'s a receptionist, include them — people in frame tell a story.' },
+        { id:'cl-4', type:'tilt',    section:'The Lobby',    title:'Tilt from lobby floor to ceiling',         completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'Find your lobby\'s most dramatic vertical space. Atrium height, columns, a skylight above. This is your "wow" shot.',   description:'Find the most impressive vertical space in the lobby. Point at the floor pattern, then slowly tilt all the way up — revealing columns, signage, windows, and ceiling. Give yourself 6–8 full seconds.' },
+        { id:'cl-5', type:'static',  section:'The Lobby',    title:'Elevator bank — doors cycling',            completed:false, custom:false, fps:null, app:null, duration:'8-10s', tip:'Multiple elevator banks need patience. Wait for at least one set of doors to open and close.',    description:'Lock your camera on the elevator bank and hold completely still. Wait for doors to open, people to exit and enter, and doors to close. The geometric rhythm of this is genuinely cinematic.' },
+        { id:'cl-6', type:'pan',     section:'The Lobby',    title:'Pan up along staircase railing',           completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Follow the railing line — let the architecture guide your pan path. Diagonal movement is visually dynamic.',   description:'Stand at the base of the staircase. Pan upward along the railing line, following its curve to the top. This diagonal movement is one of the most dynamic architectural shots you can get.' },
+        { id:'cl-7', type:'static',  section:'People & Light', title:'Bird\'s eye: crowd flowing below',       completed:false, custom:false, fps:null, app:null, duration:'6s',   tip:'Find the mezzanine or an upper landing. Lock it still — the movement below is the whole point.',     description:'If there\'s a mezzanine or upper landing, this is your bird\'s-eye shot. Lock your camera completely still and let people flow through the frame below for 5–6 seconds. Let them be anonymous.' },
+        { id:'cl-8', type:'static',  section:'People & Light', title:'Close static: signage or lobby art',    completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Get closer than feels comfortable — 8 to 10 inches. Details reward the attentive viewer.',    description:'Find a logo, wayfinding sign, or piece of lobby artwork. Get 8–10 inches away. Hold completely still. 4 to 5 seconds. These detail shots are the quiet punctuation marks of a great video.' },
+        { id:'cl-9', type:'slow-mo', section:'People & Light', title:'Slow-mo: natural light on wall',        completed:false, custom:false, fps:60, app:null, duration:'6-8s',   tip:'Switch to 60fps in your camera app before this shot. Look for walls where light moves — dust, shadow patterns, reflected light from windows.',  description:'Switch to 60fps slow-motion mode. Find a wall where natural window light creates patterns or movement — dust motes, shadow edges, reflected glass. Let it run for 6–8 seconds.' },
+      ],
+    },
+  },
+];
+
+const STARTER_PROJECTS = [
+  {
+    meta: { title:'Beginner Starter', description:'9 tutorial-quality shots using only static, pan, and tilt.', icon:'🌱', skillLabel:'Beginner' },
+    project: {
+      id: 'starter-beginner-v1', name: 'Starter: Beginner Shoot', isChallenge: false,
+      event: 'Your Next Event', location: '', topic: 'Beginner B-Roll Practice', duration: 60, skillLevel: 1,
+      sections: ['Arrival','Venue & Signage','Crowd & Culture'],
+      shots: [
+        { id:'sb-1', type:'static',  section:'Arrival',          title:'Wide static: venue exterior',            completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Lock your elbows to your ribs. Find a frame that includes sky above the venue for scale.',   description:'Stand outside the venue. Lock your elbows against your ribcage, grip the phone with both hands, and hold completely still. Let the scene breathe. 5 full seconds.' },
+        { id:'sb-2', type:'tilt',    section:'Arrival',          title:'Tilt up: entrance or banner',             completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Start at the ground and tilt slowly up. If there\'s a banner or sign at the top, that\'s your end frame.',  description:'Frame the pavement at the very bottom of the entrance. Slowly tilt upward to reveal the building, signage, or banner above. Take your time — 5 to 6 seconds for a confident reveal.' },
+        { id:'sb-3', type:'pan',     section:'Arrival',          title:'Pan across arriving crowd',               completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'Stand elevated if possible — a step or kerb helps. Pan slowly across the flow of arriving people.',  description:'Position yourself where you can see the crowd arriving. Sweep slowly across the scene, capturing the energy of people streaming in. Start recording a second before you begin the pan.' },
+        { id:'sb-4', type:'static',  section:'Venue & Signage',  title:'Close static: event badge or lanyard',   completed:false, custom:false, fps:null, app:null, duration:'4s',   tip:'Get 6-8 inches from the badge. Portrait or landscape both work here.',   description:'Get your camera 6–8 inches from the event badge, lanyard, or credential. Hold completely still for 4 seconds. This small detail immediately tells the viewer what event they\'re watching.' },
+        { id:'sb-5', type:'pan',     section:'Venue & Signage',  title:'Pan across registration desk',            completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Start the pan on empty space to the left, then sweep right through the desk activity. Give it time.',  description:'Position yourself 3–4 metres from the registration desk. Pan slowly across it — from left to right — capturing the activity of check-in and name badges.' },
+        { id:'sb-6', type:'static',  section:'Venue & Signage',  title:'Static: hallway leading into main room',  completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Position yourself so the hallway leads the eye into the distance. The vanishing point is your friend.',  description:'Find the corridor or hallway leading to the main event space. Lock your camera on the perspective shot, pointing into the venue. Let people walk through the frame.' },
+        { id:'sb-7', type:'static',  section:'Crowd & Culture',  title:'Wide static: crowd from elevation',       completed:false, custom:false, fps:null, app:null, duration:'6s',   tip:'Find a staircase landing or balcony railing. The higher you are, the more people fit in frame.',  description:'Find an elevated position — staircase, balcony, mezzanine. Lock your camera looking down at the crowd. Hold still for 6 full seconds. This shot shows scale and energy better than anything.' },
+        { id:'sb-8', type:'static',  section:'Crowd & Culture',  title:'Close static: hands, coffee, devices',   completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Get close — 6 to 8 inches away. Look for hands with interesting context: a coffee cup over a busy background, a phone near a badge.',  description:'Get close to a small detail in the crowd scene: a coffee cup, typing hands, a name badge, a phone. These micro-details anchor the viewer in the human reality of the event.' },
+        { id:'sb-9', type:'pan',     section:'Crowd & Culture',  title:'Pan across networking crowd',             completed:false, custom:false, fps:null, app:null, duration:'7-9s', tip:'Stand slightly elevated if possible. A slow, wide pan across a dense crowd is one of the most satisfying shots in event b-roll.',  description:'Find a busy networking area. Pan slowly across the crowd — 7 to 9 seconds, no faster. Capture conversations, energy, and the density of people. This is your "event is alive" shot.' },
+      ],
+    },
+  },
+  {
+    meta: { title:'Story Arc Starter', description:'15 shots following the full event narrative arc from arrival to departure.', icon:'📖', skillLabel:'Intermediate' },
+    project: {
+      id: 'starter-arc-v1', name: 'Starter: Story Arc', isChallenge: false,
+      event: 'Your Next Event', location: '', topic: 'Story Arc Practice', duration: 90, skillLevel: 2,
+      sections: ['Arrival','Venue & Build-Up','Main Session','Human Moments','Departure'],
+      shots: [
+        { id:'sa-1', type:'tilt',     section:'Arrival',        title:'Tilt up: venue exterior reveal',         completed:false, custom:false, fps:null, app:null, duration:'6s',   tip:'This is your opening shot. Slow, confident tilt from ground to sky. Set the tone.', description:'Stand well back from the venue. Frame the pavement, then tilt slowly upward to reveal the building. 6 full seconds. This is your film\'s opening frame.' },
+        { id:'sa-2', type:'tracking', section:'Arrival',        title:'Track alongside arriving attendee',      completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'Walk at their exact pace, bent knees, from about 5 feet to the side.',  description:'Walk alongside an arriving attendee (with their permission) from car or transit to the entrance. Bent knees, smooth pace. Let them lead — you follow.' },
+        { id:'sa-3', type:'pan',      section:'Arrival',        title:'Pan across event signage',               completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Start left of the sign, pan slowly right to a clean ending frame.',  description:'Pan across the event title banner or entrance signage. This is the moment the viewer knows exactly where they are.' },
+        { id:'sa-4', type:'static',   section:'Venue & Build-Up', title:'Wide static: empty room before doors', completed:false, custom:false, fps:null, app:null, duration:'5s',   tip:'Get this shot before the crowd arrives. An empty room tells a story of anticipation.', description:'If you can access the main room before doors open, get this shot. An empty venue, all set up and waiting. This makes the crowd arrival feel dramatic.' },
+        { id:'sa-5', type:'pan',      section:'Venue & Build-Up', title:'Pan across venue setup/staging',       completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'Slow and deliberate. Show the craft that went into the setup.',  description:'Pan across the main stage setup, AV rig, or exhibit area. Show the scale and craft of the venue production. This shot says: someone worked hard for this.' },
+        { id:'sa-6', type:'static',   section:'Venue & Build-Up', title:'Close: registration desk detail',     completed:false, custom:false, fps:null, app:null, duration:'4s',   tip:'Get close to a name badge being handed over or a scanner beeping.',  description:'A close-up at the registration desk — badge handover, scanner beep, lanyard being put on. Small moments of arrival ritual.' },
+        { id:'sa-7', type:'static',   section:'Main Session',   title:'Wide static: full room from back',       completed:false, custom:false, fps:null, app:null, duration:'8s',   tip:'Get to the back wall or sound desk position. This is your room-scale shot.',  description:'From the back of the room, lock your camera on the full width of the audience and stage. 8 seconds. Hold still. Let the scale of the room tell the story.' },
+        { id:'sa-8', type:'static',   section:'Main Session',   title:'Close static: speaker face (2-3x zoom)', completed:false, custom:false, fps:null, app:null, duration:'6s',   tip:'Use your 2x or 3x optical zoom lens from a respectable distance. Don\'t physically crowd the speaker.',  description:'From the audience, zoom in to a 2x or 3x close-up of the speaker. Lock the frame. 6 seconds. The energy in a speaker\'s face during a talk is some of the most compelling footage you can get.' },
+        { id:'sa-9', type:'slow-mo',  section:'Main Session',   title:'Slow-mo 60fps: audience applause',       completed:false, custom:false, fps:60, app:null, duration:'6-8s',  tip:'Switch to slow-mo before the moment starts. You can\'t predict the exact second — be ready.',  description:'Switch to 60fps slow-motion mode before a session ends. Capture the moment of audience applause in slow-motion. The unscripted joy of a room responding to something real.' },
+        { id:'sa-10',type:'pan',      section:'Human Moments',  title:'Pan across engaged audience',            completed:false, custom:false, fps:null, app:null, duration:'7-9s', tip:'Slow pan. Look for faces that are genuinely engaged — nodding, leaning forward, smiling.',  description:'During a talk or panel, pan slowly across the audience. Capture faces in various states of engagement — listening, reacting, note-taking. Human connection at scale.' },
+        { id:'sa-11',type:'static',   section:'Human Moments',  title:'Static: two people having a conversation',completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Film from 10-15 feet away on your 2x lens. Give people conversational privacy while capturing the moment.',  description:'From a respectful distance, lock your camera on two people in genuine conversation during a break. 5 to 6 seconds. This is your human connection shot.' },
+        { id:'sa-12',type:'static',   section:'Human Moments',  title:'Close: hands with coffee or notebook',  completed:false, custom:false, fps:null, app:null, duration:'4-5s', tip:'Physical details ground the viewer in real life. A notebook + hand conveys "thinking" without words.',  description:'A close-up of hands: writing notes, holding a coffee cup, gesturing in conversation. These grounding details make event footage feel real rather than promotional.' },
+        { id:'sa-13',type:'tracking', section:'Departure',      title:'Track with crowd leaving session',       completed:false, custom:false, fps:null, app:null, duration:'6-8s', tip:'Face the crowd coming toward you and walk backward, or turn and walk with them.',  description:'After the main session ends, walk with (or in front of) the crowd as they stream out. Bent knees. This shot provides natural pacing energy at the edit transition to the departure section.' },
+        { id:'sa-14',type:'pan',      section:'Departure',      title:'Pan across people saying goodbyes',     completed:false, custom:false, fps:null, app:null, duration:'7s',   tip:'Slow, affectionate pan. These moments of departure have warmth — let the camera honour them.',  description:'Pan slowly across people shaking hands, hugging, exchanging cards at the end of the event. This is your emotional closing sequence — the feeling of the event being worth it.' },
+        { id:'sa-15',type:'static',   section:'Departure',      title:'Static: venue emptying at day\'s end',  completed:false, custom:false, fps:null, app:null, duration:'8s',   tip:'Stay until the room starts emptying. The still camera watching the room empty is a classic cinematic closing image.',  description:'From an elevated or wide position, lock your camera on the main space as it empties. 8 seconds. This closing static shot bookends your opening empty-room shot. The story completes.' },
+      ],
+    },
+  },
+  {
+    meta: { title:'Advanced Sampler', description:'12 shots showcasing hyperlapse, timelapse, 120fps slow-mo, and zoom technique.', icon:'🚀', skillLabel:'Advanced' },
+    project: {
+      id: 'starter-advanced-v1', name: 'Starter: Advanced Sampler', isChallenge: false,
+      event: 'Your Next Event', location: '', topic: 'Advanced Techniques Practice', duration: 120, skillLevel: 3,
+      sections: ['Mimo Shots','Zoom & Telephoto','Slow Motion','Creative Angles'],
+      shots: [
+        { id:'sv-1', type:'hyperlapse', section:'Mimo Shots', title:'Hyperlapse: walk through main venue space', completed:false, custom:false, fps:null, app:'Mimo', duration:'90s walk', tip:'Open Mimo app → Hyperlapse. Walk in a straight line at natural pace for a minimum of 90 seconds.',  description:'Open the Mimo app and select Hyperlapse. Walk the full length of the main event space at your natural pace. 90 seconds minimum of walking time. Keep the camera pointing consistently forward.' },
+        { id:'sv-2', type:'hyperlapse', section:'Mimo Shots', title:'Hyperlapse: walk venue exterior',           completed:false, custom:false, fps:null, app:'Mimo', duration:'2min walk', tip:'Outdoors hyperlapses compress beautifully. Walk from one end of the building to the other.',  description:'Outside the venue, open Mimo Hyperlapse. Walk from one end of the building facade to the other — 2 minutes of walking produces about 12 seconds of footage. Start early enough to catch light.' },
+        { id:'sv-3', type:'timelapse',  section:'Mimo Shots', title:'Timelapse: room filling before session',   completed:false, custom:false, fps:null, app:'Mimo', duration:'15+ min', tip:'Prop your phone against something solid — a bag, a book. Check the frame before you leave it.',  description:'Open Mimo Timelapse, prop your phone on something solid pointing at the main room, and let it run for 15–20 minutes before a session starts. Watch the room fill from empty to packed.' },
+        { id:'sv-4', type:'timelapse',  section:'Mimo Shots', title:'Timelapse: city view from window',         completed:false, custom:false, fps:null, app:'Mimo', duration:'20 min',  tip:'Find a window with an interesting view — skyline, street, cloud movement. Press the phone gently against the glass.',  description:'Find a window with a city view and start a Mimo Timelapse. Press the phone gently against the glass for stability. 20 minutes of clouds, traffic, or people becomes a beautiful opener.' },
+        { id:'sv-5', type:'zoom',       section:'Zoom & Telephoto', title:'Telephoto walk-back: speaker on stage', completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Switch to 3x, then walk backwards until the framing is right. The compressed background effect is the whole point.',  description:'Switch to your phone\'s 3x optical lens, then physically walk backward until the speaker fills the frame comfortably. Lock and hold for 5–6 seconds. The background compression looks cinematic.' },
+        { id:'sv-6', type:'zoom',       section:'Zoom & Telephoto', title:'Zoom close-up: authentic reaction',    completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'From 10–15 feet away, use 2x or 3x. People don\'t know they\'re being filmed — authenticity is the value.',  description:'From 10–15 feet away on your 2x or 3x lens, find an audience member with a genuine reaction — laughing, nodding, leaning in. Lock and hold for 5 seconds. Authenticity beats staging every time.' },
+        { id:'sv-7', type:'slow-mo',    section:'Slow Motion', title:'120fps: crowd applause or standing ovation', completed:false, custom:false, fps:120, app:null, duration:'6-8s', tip:'iPhone: Camera → Slo-Mo (it\'s in the 120fps mode by default). Android: Camera → More → Slow Motion.',  description:'Switch to 120fps slow-motion. Capture a moment of peak energy — applause, a standing ovation, a big laugh. At 120fps, the footage runs at 5x slow motion. It feels like a film.' },
+        { id:'sv-8', type:'slow-mo',    section:'Slow Motion', title:'120fps: detail — coffee pour or water',     completed:false, custom:false, fps:120, app:null, duration:'6-8s', tip:'Any liquid at 120fps is mesmerising. Good light makes it go from beautiful to extraordinary.',  description:'Find a catering area and capture a liquid pour at 120fps slow-motion. Coffee being poured, ice being dropped, a bottle being opened. 6–8 seconds of recording gives you rich slow-motion material.' },
+        { id:'sv-9', type:'slow-mo',    section:'Slow Motion', title:'60fps: people walking through lobby',       completed:false, custom:false, fps:60, app:null, duration:'6s',   tip:'60fps slow-motion is subtle enough to look intentional rather than dramatic. Great for transitional people-moving shots.',  description:'Switch to 60fps and capture people moving through a lobby or corridor at normal walking pace. At half speed, ordinary movement gains a reflective, intentional quality that works beautifully in edits.' },
+        { id:'sv-10',type:'tracking',   section:'Creative Angles', title:'Low-angle tracking: walking feet',      completed:false, custom:false, fps:null, app:null, duration:'5-6s', tip:'Hold the phone at ankle height, pointing forward and slightly upward. Walk in sync with your subject.',  description:'Hold your phone at ankle height and track alongside someone walking — showing just their feet and legs from ground level. This low-angle perspective adds cinematic variety instantly.' },
+        { id:'sv-11',type:'static',     section:'Creative Angles', title:'Over-shoulder: looking at stage',        completed:false, custom:false, fps:null, app:null, duration:'6s',   tip:'Frame someone\'s head and shoulder in the foreground, stage in focus in the background. Locks the phone gently against your shoulder.',  description:'Find an attendee in the audience and position yourself behind and to one side, framing their shoulder and head in the foreground with the stage visible behind them. Hold completely still for 6 seconds.' },
+        { id:'sv-12',type:'tilt',       section:'Creative Angles', title:'Extreme tilt up: architectural interior',completed:false, custom:false, fps:null, app:null, duration:'7-8s', tip:'The slower the tilt, the more impressive the reveal. Slow down by 30% compared to your instinct.',  description:'Find the most dramatic interior architecture in the venue — an atrium, vaulted ceiling, dramatic staircase. Frame the very base and tilt all the way up, past the midpoint and ceiling. 7 to 8 seconds of committed tilt.' },
+      ],
+    },
+  },
+];
 
 const LOADING_MSGS = [
   'Analyzing your event…',
@@ -1022,6 +1420,11 @@ const S = {
   builderName:      '',
   builderAddingTo:  null,     /* section name currently showing add-shot form */
   _loadingTimer:    null,
+  /* School */
+  prevScreen:   'home',
+  lessonId:     null,
+  lessonsRead:  [],
+  badges:       [],
 };
 
 /* ──────────────────────────────────────────
@@ -1032,6 +1435,18 @@ function saveProjects() {
 }
 function loadProjects() {
   try { S.projects = JSON.parse(localStorage.getItem('broll_projects') || '[]'); } catch { S.projects = []; }
+}
+function saveBadges() {
+  try { localStorage.setItem('broll_badges', JSON.stringify(S.badges)); } catch(e) {}
+}
+function loadBadges() {
+  try { S.badges = JSON.parse(localStorage.getItem('broll_badges') || '[]'); } catch { S.badges = []; }
+}
+function saveLessonsRead() {
+  try { localStorage.setItem('broll_lessons_read', JSON.stringify(S.lessonsRead)); } catch(e) {}
+}
+function loadLessonsRead() {
+  try { S.lessonsRead = JSON.parse(localStorage.getItem('broll_lessons_read') || '[]'); } catch { S.lessonsRead = []; }
 }
 
 /* ──────────────────────────────────────────
@@ -1107,6 +1522,8 @@ function render() {
     new:       renderNew,
     checklist: renderChecklist,
     builder:   renderBuilder,
+    school:    renderSchool,
+    lesson:    renderLesson,
   };
   el.innerHTML = (screens[S.screen] || renderHome)();
   bindEvents();
@@ -1118,7 +1535,8 @@ function updateHeader() {
   if (!h) return;
   const showBack     = S.screen !== 'home';
   const isChecklist = S.screen === 'checklist' && S.project;
-  const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder' };
+  const lessonTitle = S.lessonId ? (LESSONS.find(l=>l.id===S.lessonId)?.title || 'Lesson') : 'Lesson';
+  const titles = { home:'<span class="blue">B-Roll</span> Planner', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder', school: '🎬 B-Roll School', lesson: esc(lessonTitle) };
   h.innerHTML = `<div class="hdr-inner">
     ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
     <div class="hdr-title">${titles[S.screen]||'B-Roll Planner'}</div>
@@ -1131,7 +1549,9 @@ function goBack() {
   S.customFormOpen = false;
   S.newDirOpen = false;
   S.reorderMode = false;
-  goTo('home');
+  const dest = S.prevScreen || 'home';
+  S.prevScreen = 'home';
+  goTo(dest);
 }
 
 function bindEvents() {
@@ -1384,6 +1804,12 @@ async function callClaude(newDir) {
         S.projects.unshift(project);
         S.project = project;
         saveProjects();
+        /* Shot Caller badge: track generation count */
+        try {
+          const n = (parseInt(localStorage.getItem('broll_projects_generated')||'0',10)||0) + 1;
+          localStorage.setItem('broll_projects_generated', n);
+          if (n >= 5) checkBadge('shot-caller');
+        } catch(e) {}
       }
       goTo('checklist');
       return;
@@ -1450,6 +1876,15 @@ function toggleShot(id) {
   if (!shot) return;
   shot.completed = !shot.completed;
   saveProjects();
+  /* Badge checks */
+  if (shot.completed) {
+    checkBadge('first-shot');
+    const allDone = S.project.shots.every(s => s.completed);
+    if (allDone) {
+      checkBadge('full-roll');
+      if (S.project.isChallenge && S.project.badgeId) checkBadge(S.project.badgeId);
+    }
+  }
   /* Surgical DOM update */
   const card = document.querySelector(`[data-shot-id="${id}"]`);
   if (card) {
@@ -1992,6 +2427,7 @@ function renderHome() {
       <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
       <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
+      <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 B-Roll School</button>
     </div>`;
   }
 
@@ -2022,6 +2458,7 @@ function renderHome() {
       <button class="btn btn-primary btn-large" onclick="startNew()">✨ New AI-Generated Project</button>
       <button class="btn btn-ghost btn-full" onclick="startBuilder()">⚡ Advanced Shot Builder</button>
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
+      <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 B-Roll School</button>
     </div>`;
 }
 
@@ -2484,10 +2921,207 @@ function animCustom(s) {
 }
 
 /* ──────────────────────────────────────────
+   B-ROLL SCHOOL — NAVIGATION
+────────────────────────────────────────── */
+function goToSchool() {
+  S.prevScreen = S.screen;
+  goTo('school');
+}
+
+function goToLesson(id) {
+  S.prevScreen = S.screen;
+  S.lessonId = id;
+  goTo('lesson');
+  /* Mark lesson as read and fire badge checks */
+  if (!S.lessonsRead.includes(id)) {
+    S.lessonsRead.push(id);
+    saveLessonsRead();
+    checkBadge('first-lesson');
+    if (S.lessonsRead.length >= 10) checkBadge('shot-scholar');
+    const shotTypeIds = ['static','pan','tilt','tracking','slow-mo','hyperlapse','timelapse','zoom'];
+    if (shotTypeIds.every(sid => S.lessonsRead.includes(sid))) checkBadge('shot-master');
+  }
+}
+
+/* ──────────────────────────────────────────
+   B-ROLL SCHOOL — BADGES
+────────────────────────────────────────── */
+function checkBadge(id) {
+  if (S.badges.includes(id)) return;
+  const badge = BADGES.find(b => b.id === id);
+  if (!badge) return;
+  S.badges.push(id);
+  saveBadges();
+  showBanner('🏅 Badge unlocked: ' + badge.name + ' — ' + badge.desc, 'gold', 5000);
+}
+
+function badgeHtml(badge) {
+  const earned = S.badges.includes(badge.id);
+  const svgStr = badge.svg.replace('class="badge-svg"', `class="badge-svg ${earned ? 'earned' : 'locked'}"`);
+  return `<div class="badge-item" title="${esc(badge.desc)}">
+    ${svgStr}
+    <span class="badge-name${earned ? ' earned-name' : ''}">${esc(badge.name)}</span>
+  </div>`;
+}
+
+function renderBadgeGrid() {
+  const earnedCount = S.badges.length;
+  return `<div class="badge-section">
+    <div class="section-label">Your Badges · ${earnedCount}/${BADGES.length}</div>
+    <div class="badge-grid">${BADGES.map(badgeHtml).join('')}</div>
+  </div>`;
+}
+
+/* ──────────────────────────────────────────
+   SCREEN: SCHOOL HUB
+────────────────────────────────────────── */
+function renderSchool() {
+  const lessonCards = LESSONS.map(l => {
+    const read = S.lessonsRead.includes(l.id);
+    return `<div class="lesson-card${read ? ' read' : ''}" onclick="goToLesson('${l.id}')">
+      <div class="lesson-icon">${l.icon}</div>
+      <div class="lesson-title">${esc(l.title)}</div>
+      <div class="lesson-subtitle">${esc(l.subtitle)}</div>
+      ${l.gyro ? `<span class="gyro-badge">Practice</span>` : ''}
+      ${read ? `<span class="read-check">✓</span>` : ''}
+    </div>`;
+  }).join('');
+
+  const challengeCards = CHALLENGES.map((c, i) => {
+    const badge = BADGES.find(b => b.id === c.meta.badgeId);
+    const earned = S.badges.includes(c.meta.badgeId);
+    const diffClass = c.meta.difficulty.toLowerCase();
+    const badgeSvg = badge ? badge.svg.replace('class="badge-svg"', `class="badge-svg ${earned ? 'earned' : 'locked'}" style="width:28px;height:28px"`) : '';
+    return `<div class="challenge-card">
+      <div class="challenge-card-header">
+        <div class="challenge-icon">${c.meta.icon}</div>
+        <div>
+          <div class="challenge-title">${esc(c.meta.title)}</div>
+          <div class="challenge-tagline">${esc(c.meta.tagline)}</div>
+          <div class="challenge-meta">
+            <span class="skill-pill ${diffClass}">${c.meta.difficulty}</span>
+            <span style="font-size:12px;color:var(--muted)">${c.meta.shotCount} shots</span>
+            ${badge ? `<div class="badge-preview-wrap">${badgeSvg}<span>${earned ? '✓ Badge earned' : 'Earn: ' + badge.name}</span></div>` : ''}
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="loadChallenge(${i})">
+        ${earned ? '🔄 Redo Challenge' : '🎯 Accept Challenge'}
+      </button>
+    </div>`;
+  }).join('');
+
+  const starterCards = STARTER_PROJECTS.map((s, i) => {
+    const diffClass = s.meta.skillLabel.toLowerCase();
+    return `<div class="starter-card">
+      <div class="starter-card-header">
+        <div class="starter-icon">${s.meta.icon}</div>
+        <div>
+          <div class="starter-title">${esc(s.meta.title)}</div>
+          <div class="starter-desc">${esc(s.meta.description)}</div>
+          <div class="challenge-meta" style="margin-top:6px">
+            <span class="skill-pill ${diffClass}">${s.meta.skillLabel}</span>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-full" onclick="loadStarterProject(${i})">📂 Load as Project</button>
+    </div>`;
+  }).join('');
+
+  return `<div class="school-hero">
+      <h2>🎬 B-Roll School</h2>
+      <p>Learn the shots, practice the moves, and take on location challenges to earn badges.</p>
+    </div>
+    <div class="section-label">Lessons · ${S.lessonsRead.length}/${LESSONS.length} completed</div>
+    <div class="lesson-grid">${lessonCards}</div>
+    <div class="challenge-section">
+      <div class="section-label">Challenges — Earn a Badge</div>
+      ${challengeCards}
+    </div>
+    <div class="starter-section">
+      <div class="section-label">Starter Projects — Practice Anywhere</div>
+      ${starterCards}
+    </div>
+    ${renderBadgeGrid()}`;
+}
+
+/* ──────────────────────────────────────────
+   SCREEN: LESSON
+────────────────────────────────────────── */
+function renderLessonBlocks(blocks) {
+  return blocks.map(b => {
+    if (b.kind === 'text')    return `<p class="lesson-text">${esc(b.body)}</p>`;
+    if (b.kind === 'tip')     return `<div class="tip-box">💡 ${esc(b.body)}</div>`;
+    if (b.kind === 'why')     return `<div class="why-box"><strong>Key insight:</strong> ${esc(b.body)}</div>`;
+    if (b.kind === 'banner')  return `<div class="tip-banner">${esc(b.body)}</div>`;
+    if (b.kind === 'bullets') return `<ul class="lesson-bullets">${b.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`;
+    return '';
+  }).join('');
+}
+
+function renderLesson() {
+  const lesson = LESSONS.find(l => l.id === S.lessonId);
+  if (!lesson) return `<p>Lesson not found.</p>`;
+  const animHtml = lesson.shotType
+    ? `<div class="lesson-anim-wrap">${renderShotAnimation({ type: lesson.shotType, fps: null, app: null })}</div>`
+    : '';
+  const read = S.lessonsRead.includes(lesson.id);
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:36px;line-height:1">${lesson.icon}</span>
+      <div>
+        <div style="font-size:18px;font-weight:700">${esc(lesson.title)}</div>
+        <div style="font-size:13px;color:var(--muted)">${esc(lesson.subtitle)}${read ? ' · <span style="color:var(--success)">✓ Completed</span>' : ''}</div>
+      </div>
+    </div>
+    ${animHtml}
+    <div class="lesson-blocks">${renderLessonBlocks(lesson.blocks)}</div>`;
+}
+
+/* ──────────────────────────────────────────
+   LOAD STARTER / CHALLENGE
+────────────────────────────────────────── */
+function loadStarterProject(idx) {
+  const starter = STARTER_PROJECTS[idx];
+  if (!starter) return;
+  const p = JSON.parse(JSON.stringify(starter.project));
+  const existing = S.projects.findIndex(x => x.id === p.id);
+  if (existing >= 0) S.projects[existing] = p; else S.projects.unshift(p);
+  S.project = p;
+  S.form.eventName = p.event || '';
+  S.form.eventLocation = p.location || '';
+  S.form.topic = p.topic || '';
+  S.form.duration = p.duration || 60;
+  S.form.skillLevel = p.skillLevel || 1;
+  saveProjects();
+  S.prevScreen = 'school';
+  goTo('checklist');
+}
+
+function loadChallenge(idx) {
+  const challenge = CHALLENGES[idx];
+  if (!challenge) return;
+  const p = JSON.parse(JSON.stringify(challenge.project));
+  const existing = S.projects.findIndex(x => x.id === p.id);
+  if (existing >= 0) S.projects[existing] = p; else S.projects.unshift(p);
+  S.project = p;
+  S.form.eventName = p.event || '';
+  S.form.eventLocation = p.location || '';
+  S.form.topic = p.topic || '';
+  S.form.duration = p.duration || 60;
+  S.form.skillLevel = p.skillLevel || 1;
+  saveProjects();
+  S.prevScreen = 'school';
+  goTo('checklist');
+  showBanner('🎯 Challenge started! Complete all shots to earn the ' + (BADGES.find(b=>b.id===challenge.meta.badgeId)?.name||'badge') + ' badge.', 'info', 5000);
+}
+
+/* ──────────────────────────────────────────
    INIT
 ────────────────────────────────────────── */
 (function init() {
   loadProjects();
+  loadBadges();
+  loadLessonsRead();
   S.screen = 'home';
   render();
 })();
