@@ -1061,8 +1061,9 @@ window.startExport = async () => {
   if (E.playing) togglePlay();
 
   const aVid = document.getElementById('aroll-preview');
-  const W        = E.aroll.width  || 1280;
-  const H        = E.aroll.height || 720;
+  // H.264 requires even dimensions — round up
+  const W = Math.ceil((E.aroll.width  || 1280) / 2) * 2;
+  const H = Math.ceil((E.aroll.height || 720)  / 2) * 2;
   const duration = E.aroll.duration;
   const FPS      = 30;
   const totalFrames = Math.ceil(duration * FPS);
@@ -1083,26 +1084,41 @@ window.startExport = async () => {
 
   try {
     // ── WebCodecs check ───────────────────────────────────
-    if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
-      throw new Error('WebCodecs not supported — use Chrome 94+, Firefox 130+, or Safari 17.4+.');
+    if (typeof VideoEncoder === 'undefined') {
+      throw new Error('Video encoding not supported. Please use Chrome 94+, Firefox 130+, or Safari 16.4+.');
+    }
+    if (typeof AudioEncoder === 'undefined') {
+      throw new Error('Audio encoding not supported. Please update to Safari 18 or later, or use Chrome / Firefox.');
     }
 
     // ── Find a supported H.264 config ─────────────────────
-    const FPS_ENC = FPS;
     const BITRATE = 5_000_000;
     let videoConfig = null;
     for (const codec of ['avc1.4d002a', 'avc1.42002a', 'avc1.640028', 'avc1.42001f']) {
-      const cfg = { codec, width: W, height: H, bitrate: BITRATE, framerate: FPS_ENC };
+      const cfg = { codec, width: W, height: H, bitrate: BITRATE, framerate: FPS };
       try {
         const { supported } = await VideoEncoder.isConfigSupported(cfg);
         if (supported) { videoConfig = cfg; break; }
       } catch {}
     }
-    if (!videoConfig) throw new Error('No supported H.264 profile found in this browser.');
+    if (!videoConfig) throw new Error(`No supported H.264 profile found (dimensions: ${W}×${H}). Try a different browser.`);
+
+    // ── Find a supported AAC config ───────────────────────
+    const N_CH = 2;
+    let audioConfig = null;
+    for (const sampleRate of [48000, 44100]) {
+      const cfg = { codec: 'mp4a.40.2', numberOfChannels: N_CH, sampleRate, bitrate: 128_000 };
+      try {
+        const { supported } = await AudioEncoder.isConfigSupported(cfg);
+        if (supported) { audioConfig = cfg; break; }
+      } catch {}
+    }
+    if (!audioConfig) {
+      throw new Error('AAC audio encoding not supported in this browser. Please update Safari or use Chrome / Firefox.');
+    }
+    const SAMPLE_RATE = audioConfig.sampleRate;
 
     // ── Load mp4-muxer ────────────────────────────────────
-    const SAMPLE_RATE = 44100;
-    const N_CH = 2;
     const { Muxer, ArrayBufferTarget } = await import(
       'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.mjs'
     );
@@ -1125,8 +1141,7 @@ window.startExport = async () => {
       output: (chunk, meta) => { try { muxer.addAudioChunk(chunk, meta); } catch(e) { audioEncErr = e; } },
       error:  e => { audioEncErr = e; },
     });
-    audioEncoder.configure({ codec:'mp4a.40.2', numberOfChannels:N_CH,
-                              sampleRate:SAMPLE_RATE, bitrate:128_000 });
+    audioEncoder.configure(audioConfig);
 
     // ── Offline audio render ──────────────────────────────
     setStatus('Decoding audio…');
@@ -1233,8 +1248,10 @@ window.startExport = async () => {
 
   } catch (err) {
     console.error('[export]', err);
-    setStatus(`Export failed: ${err?.message || err}`);
+    const msg = err?.message || String(err);
+    setStatus(`Export failed: ${msg}`);
     setProgress(0);
+    alert(`Export failed:\n\n${msg}`);
   } finally {
     bv.remove();
     btn.disabled = false;
