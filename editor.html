@@ -376,7 +376,7 @@
           <!-- B-roll track -->
           <div class="tl-row">
             <div class="tl-row-label">B-Roll</div>
-            <div class="tl-row-area" id="broll-track" onclick="onTrackClick(event)">
+            <div class="tl-row-area" id="broll-track">
               <!-- clip divs injected here -->
             </div>
           </div>
@@ -421,7 +421,7 @@
       </div>
 
       <p class="tip-inline">
-        <strong>Tip:</strong> Select a b-roll clip from the rack above, then tap the B-Roll track to place it. Drag placed clips to reposition. Tap a placed clip to adjust or delete it.
+        <strong>Tip:</strong> Drag placed clips to reposition. Tap a placed clip to adjust its in/out points or delete it.
       </p>
     </div>
   </div>
@@ -497,7 +497,7 @@ async function generateThumb(url) {
     const v = document.createElement('video');
     const c = document.createElement('canvas');
     c.width = 160; c.height = 90;
-    v.muted = true; v.playsInline = true; v.preload = 'metadata';
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
     // Must be in the DOM for Chrome to decode frames for drawImage
     Object.assign(v.style, { visibility:'hidden', position:'fixed', width:'1px', height:'1px', top:'-9999px', left:'-9999px' });
     document.body.appendChild(v);
@@ -634,29 +634,6 @@ function buildRuler(dur) {
   ruler.innerHTML = html;
 }
 
-window.onTrackClick = e => {
-  if (E.selectedBroll === null) return; // nothing to place
-  const track = document.getElementById('broll-track');
-  const scrollLeft = document.getElementById('tl-outer').scrollLeft;
-  const rect = track.getBoundingClientRect();
-  const clickX = e.clientX - rect.left + scrollLeft;
-  const timePos = Math.max(0, Math.round((clickX / E.pxPerSec) * 10) / 10);
-  const bclip = E.broll[E.selectedBroll];
-
-  E.clips.push({
-    brollIdx:   E.selectedBroll,
-    trackStart: timePos,
-    inPoint:    bclip.inPoint,
-    outPoint:   bclip.outPoint,
-  });
-  E.selected = E.clips.length - 1;
-  E.selectedBroll = null;
-
-  renderThumbStrip();
-  renderClips();
-  showClipPanel();
-  updateExportBtn();
-};
 
 function renderClips() {
   const track = document.getElementById('broll-track');
@@ -705,7 +682,7 @@ function startDrag(e) {
     pointerId: e.pointerId,
   };
   _dragActive = false;
-  e.stopPropagation(); // prevent onTrackClick from firing
+  e.stopPropagation();
 }
 document.addEventListener('pointermove', e => {
   if (!_drag) return;
@@ -716,7 +693,23 @@ document.addEventListener('pointermove', e => {
     try { _drag.el.setPointerCapture(_drag.pointerId); } catch {}
   }
   const dt = dx / E.pxPerSec;
-  E.clips[_drag.idx].trackStart = Math.max(0, Math.round((_drag.origStart + dt) * 10) / 10);
+  const dragged = E.clips[_drag.idx];
+  const dragDur = dragged.outPoint - dragged.inPoint;
+  let newStart = Math.max(0, Math.round((_drag.origStart + dt) * 10) / 10);
+
+  // Clamp position to prevent overlapping other clips.
+  // Classify each other clip as left or right based on original drag position.
+  let lo = 0, hi = E.aroll ? E.aroll.duration - dragDur : 9999;
+  E.clips.forEach((c, i) => {
+    if (i === _drag.idx) return;
+    const cDur = c.outPoint - c.inPoint;
+    if (c.trackStart + cDur <= _drag.origStart) {
+      lo = Math.max(lo, c.trackStart + cDur); // this clip is to our left
+    } else {
+      hi = Math.min(hi, c.trackStart - dragDur); // this clip is to our right
+    }
+  });
+  dragged.trackStart = Math.max(lo, Math.min(hi, newStart));
   renderClips();
   if (E.selected === _drag.idx) showClipPanel();
 });
@@ -786,13 +779,19 @@ aVid.addEventListener('ended', () => {
 });
 
 function syncOverlay(t) {
-  const match = E.clips.find(c => {
+  // Sort clips chronologically and use a small tolerance so adjacent clips
+  // don't cause a brief flash of A-roll during the transition.
+  const EPSILON = 0.1;
+  const sorted = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
+  const match = sorted.find(c => {
     const dur = c.outPoint - c.inPoint;
-    return t >= c.trackStart && t < c.trackStart + dur;
+    return t >= c.trackStart - EPSILON && t < c.trackStart + dur + EPSILON;
   });
   if (match) {
     const bclip = E.broll[match.brollIdx];
-    const bTime = match.inPoint + (t - match.trackStart);
+    const rawTime = match.inPoint + (t - match.trackStart);
+    // Clamp bTime to valid range
+    const bTime = Math.max(match.inPoint, Math.min(match.outPoint - 0.01, rawTime));
     if (bVid.dataset.src !== bclip.url) {
       bVid.dataset.src = bclip.url;
       bVid.src = bclip.url;
@@ -831,6 +830,37 @@ function updatePlayheadPos(t) {
   const LABEL_W = 64;
   document.getElementById('tl-playhead').style.left = (t * E.pxPerSec + LABEL_W) + 'px';
 }
+
+// ── PLACE AT INDICATOR ───────────────────────────────────
+window.placeAtIndicator = function() {
+  if (!E.aroll) { alert('Load your A-roll first.'); return; }
+  if (!E.broll.length) return;
+  const b = E.broll[E.trimClipIdx];
+  const timePos = document.getElementById('aroll-preview').currentTime || 0;
+  const dur = b.outPoint - b.inPoint;
+
+  // Check for overlap with existing clips
+  const overlaps = E.clips.some(c => {
+    const cd = c.outPoint - c.inPoint;
+    return timePos < c.trackStart + cd && timePos + dur > c.trackStart;
+  });
+  if (overlaps) {
+    alert('There is already a clip at this position. Move the playhead to an empty spot and try again.');
+    return;
+  }
+
+  E.clips.push({
+    brollIdx:   E.trimClipIdx,
+    trackStart: Math.round(timePos * 10) / 10,
+    inPoint:    b.inPoint,
+    outPoint:   b.outPoint,
+  });
+  E.selected = E.clips.length - 1;
+  renderThumbStrip();
+  renderClips();
+  showClipPanel();
+  updateExportBtn();
+};
 
 // ── TRIM B-ROLL CARD ─────────────────────────────────────
 function renderTrimCard() {
@@ -873,7 +903,8 @@ function renderTrimCard() {
       <div class="trim-summary" id="trim-summary">
         Trimmed: ${inPt.toFixed(1)}s – ${outPt.toFixed(1)}s &nbsp;(${trimmed}s used)
       </div>
-      <div class="place-hint">👇 Tap the timeline below to place this clip</div>
+      <button class="btn btn-ghost" onclick="placeAtIndicator()"
+              style="width:100%;margin-top:10px;font-weight:700">📍 Place at indicator</button>
     </div>`;
 
   // Seek the preview to inPoint after metadata loads
