@@ -438,7 +438,7 @@
   <div class="card">
     <div class="card-title">4 · Export</div>
     <div class="info-banner" style="margin-bottom:12px">
-      Export plays your timeline at normal speed and saves an MP4. Works on Chrome, Firefox, and Safari.
+      Export encodes your edit frame-by-frame into an MP4 — takes a minute but produces a clean, playable file. Works on Chrome, Firefox, and Safari.
     </div>
     <button class="btn btn-primary btn-full" id="export-btn" onclick="startExport()" disabled>
       ⬇ Export Video
@@ -988,55 +988,57 @@ function setProgress(pct) {
   fill.style.width = pct + '%';
 }
 
-// Audio context — createMediaElementSource can only be called once per element
-let _exportAudioCtx = null;
-let _exportAudioSrc = null;
-
 window.startExport = async () => {
   if (!E.aroll || E.clips.length === 0) return;
   const btn = document.getElementById('export-btn');
   btn.disabled = true;
   setProgress(1);
   setStatus('Preparing export…');
-
   if (E.playing) togglePlay();
 
   const aVid = document.getElementById('aroll-preview');
-  const W = E.aroll.width  || 1920;
-  const H = E.aroll.height || 1080;
+  const W        = E.aroll.width  || 1280;
+  const H        = E.aroll.height || 720;
   const duration = E.aroll.duration;
+  const FPS      = 30;
+  const totalFrames = Math.ceil(duration * FPS);
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
+  const ctx2d = canvas.getContext('2d');
 
+  // Hidden video for b-roll frame seeks
   const bv = document.createElement('video');
-  bv.muted = true; bv.playsInline = true;
+  bv.muted = true; bv.playsInline = true; bv.preload = 'auto';
   Object.assign(bv.style, { position:'fixed', top:'-9999px', left:'-9999px',
                              width:'1px', height:'1px', visibility:'hidden' });
   document.body.appendChild(bv);
 
-  let processor    = null;
-  let captureAudio = false;
+  let videoEncErr = null;
+  let audioEncErr = null;
 
   try {
-    // ── Require WebCodecs ─────────────────────────────────
+    // ── WebCodecs check ───────────────────────────────────
     if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
-      throw new Error('WebCodecs not supported. Please use Chrome 94+, Firefox 130+, or Safari 17.4+.');
+      throw new Error('WebCodecs not supported — use Chrome 94+, Firefox 130+, or Safari 17.4+.');
     }
 
-    // ── Audio context (created once per page load) ────────
-    if (!_exportAudioCtx) {
-      _exportAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      _exportAudioSrc = _exportAudioCtx.createMediaElementSource(aVid);
-      _exportAudioSrc.connect(_exportAudioCtx.destination); // keep speakers on
+    // ── Find a supported H.264 config ─────────────────────
+    const FPS_ENC = FPS;
+    const BITRATE = 5_000_000;
+    let videoConfig = null;
+    for (const codec of ['avc1.4d002a', 'avc1.42002a', 'avc1.640028', 'avc1.42001f']) {
+      const cfg = { codec, width: W, height: H, bitrate: BITRATE, framerate: FPS_ENC };
+      try {
+        const { supported } = await VideoEncoder.isConfigSupported(cfg);
+        if (supported) { videoConfig = cfg; break; }
+      } catch {}
     }
-    if (_exportAudioCtx.state === 'suspended') await _exportAudioCtx.resume();
-
-    const SAMPLE_RATE = _exportAudioCtx.sampleRate;
-    const N_CH = 2;
+    if (!videoConfig) throw new Error('No supported H.264 profile found in this browser.');
 
     // ── Load mp4-muxer ────────────────────────────────────
+    const SAMPLE_RATE = 44100;
+    const N_CH = 2;
     const { Muxer, ArrayBufferTarget } = await import(
       'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.mjs'
     );
@@ -1048,130 +1050,108 @@ window.startExport = async () => {
       fastStart: 'in-memory',
     });
 
-    // ── Video encoder (H.264) ─────────────────────────────
+    // ── Encoders ──────────────────────────────────────────
     const videoEncoder = new VideoEncoder({
-      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-      error:  e => console.error('[VideoEncoder]', e),
+      output: (chunk, meta) => { try { muxer.addVideoChunk(chunk, meta); } catch(e) { videoEncErr = e; } },
+      error:  e => { videoEncErr = e; },
     });
-    videoEncoder.configure({
-      codec:     'avc1.640028', // H.264 High Profile Level 4.0 — up to 1080p
-      width:     W,
-      height:    H,
-      bitrate:   5_000_000,
-      framerate: 30,
-    });
+    videoEncoder.configure(videoConfig);
 
-    // ── Audio encoder (AAC-LC) ────────────────────────────
     const audioEncoder = new AudioEncoder({
-      output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-      error:  e => console.error('[AudioEncoder]', e),
+      output: (chunk, meta) => { try { muxer.addAudioChunk(chunk, meta); } catch(e) { audioEncErr = e; } },
+      error:  e => { audioEncErr = e; },
     });
-    audioEncoder.configure({
-      codec:            'mp4a.40.2',
-      numberOfChannels: N_CH,
-      sampleRate:       SAMPLE_RATE,
-      bitrate:          128_000,
-    });
+    audioEncoder.configure({ codec:'mp4a.40.2', numberOfChannels:N_CH,
+                              sampleRate:SAMPLE_RATE, bitrate:128_000 });
 
-    // ── Audio capture via ScriptProcessorNode ─────────────
+    // ── Offline audio render ──────────────────────────────
+    setStatus('Decoding audio…');
+    const rawAudio = await fetch(E.aroll.url).then(r => r.arrayBuffer());
+    const offCtx = new OfflineAudioContext(N_CH, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE);
+    const audioBuf = await offCtx.decodeAudioData(rawAudio);
+    const audioSrc = offCtx.createBufferSource();
+    audioSrc.buffer = audioBuf;
+    audioSrc.connect(offCtx.destination);
+    audioSrc.start(0);
+    const rendered = await offCtx.startRendering();
+
+    const ach0 = rendered.getChannelData(0);
+    const ach1 = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : ach0;
+    const ACHUNK = 4096;
     let audioTsUs = 0;
-    processor = _exportAudioCtx.createScriptProcessor(2048, N_CH, N_CH);
-    _exportAudioSrc.connect(processor);
-    processor.connect(_exportAudioCtx.destination);
-    processor.onaudioprocess = e => {
-      if (!captureAudio) return;
-      const ch0 = e.inputBuffer.getChannelData(0);
-      const ch1 = e.inputBuffer.getChannelData(1);
-      const buf = new Float32Array(ch0.length * 2);
-      buf.set(ch0, 0);
-      buf.set(ch1, ch0.length);
-      try {
-        const frame = new AudioData({
-          format: 'f32-planar', sampleRate: SAMPLE_RATE,
-          numberOfFrames: ch0.length, numberOfChannels: N_CH,
-          timestamp: audioTsUs, data: buf,
-        });
-        audioTsUs += Math.round(ch0.length / SAMPLE_RATE * 1_000_000);
-        audioEncoder.encode(frame);
-        frame.close();
-      } catch {}
-    };
+    for (let off = 0; off < rendered.length; off += ACHUNK) {
+      if (audioEncErr) throw audioEncErr;
+      const count = Math.min(ACHUNK, rendered.length - off);
+      const buf = new Float32Array(count * 2);
+      buf.set(ach0.subarray(off, off + count), 0);
+      buf.set(ach1.subarray(off, off + count), count);
+      const af = new AudioData({ format:'f32-planar', sampleRate:SAMPLE_RATE,
+                                  numberOfFrames:count, numberOfChannels:N_CH,
+                                  timestamp:audioTsUs, data:buf });
+      audioTsUs += Math.round(count / SAMPLE_RATE * 1_000_000);
+      audioEncoder.encode(af);
+      af.close();
+    }
 
-    // ── Seek A-roll to start ──────────────────────────────
-    aVid.currentTime = 0;
-    await new Promise(resolve => {
-      if (aVid.readyState >= 2) { resolve(); return; }
-      aVid.addEventListener('loadeddata', resolve, { once: true });
-    });
-
-    // ── Draw + encode loop ────────────────────────────────
+    // ── Frame-by-frame video encode ───────────────────────
     const sortedClips = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
-    let frameCount = 0;
+    let curBrollUrl = null;
 
-    await new Promise(resolve => {
-      let stopped = false;
-      const stop = () => { if (!stopped) { stopped = true; resolve(); } };
-
-      const drawFrame = () => {
-        if (stopped) return;
-        const t = aVid.currentTime;
-
-        try { ctx.drawImage(aVid, 0, 0, W, H); } catch {}
-
-        const clip = sortedClips.find(c => {
-          const d = c.outPoint - c.inPoint;
-          return t >= c.trackStart && t < c.trackStart + d;
-        });
-        if (clip) {
-          const bc = E.broll[clip.brollIdx];
-          if (bv.dataset.exportUrl !== bc.url) {
-            bv.dataset.exportUrl = bc.url;
-            bv.src = bc.url; bv.load();
-            bv.currentTime = clip.inPoint;
-            bv.play().catch(() => {});
-          } else {
-            const expected = clip.inPoint + (t - clip.trackStart);
-            if (Math.abs(bv.currentTime - expected) > 0.3) bv.currentTime = expected;
-            if (bv.paused && !bv.ended) bv.play().catch(() => {});
-          }
-          try { if (bv.readyState >= 2) ctx.drawImage(bv, 0, 0, W, H); } catch {}
-        } else {
-          if (!bv.paused) bv.pause();
-        }
-
-        // Encode video frame
-        try {
-          const vf = new VideoFrame(canvas, { timestamp: Math.round(t * 1_000_000) });
-          videoEncoder.encode(vf, { keyFrame: frameCount % 90 === 0 });
-          vf.close();
-          frameCount++;
-        } catch {}
-
-        const pct = Math.min(99, Math.round(t / duration * 100));
-        setProgress(pct);
-        setStatus(`Exporting… ${pct}%  (${fmtDur(Math.max(0, duration - t))} remaining)`);
-
-        if (aVid.ended || t >= duration - 0.05) {
-          setTimeout(stop, 500); // let last frames land
-        } else {
-          requestAnimationFrame(drawFrame);
-        }
-      };
-
-      captureAudio = true;
-      aVid.play();
-      requestAnimationFrame(drawFrame);
+    const seekTo = (vid, t) => new Promise(resolve => {
+      vid.currentTime = t;
+      vid.addEventListener('seeked', resolve, { once: true });
     });
 
-    // ── Flush + mux ───────────────────────────────────────
-    captureAudio = false;
+    for (let i = 0; i < totalFrames; i++) {
+      if (videoEncErr) throw videoEncErr;
+      const t = i / FPS;
+
+      // Seek & draw A-roll
+      await seekTo(aVid, t);
+      try { ctx2d.drawImage(aVid, 0, 0, W, H); } catch {}
+
+      // B-roll overlay
+      const clip = sortedClips.find(c => t >= c.trackStart && t < c.trackStart + (c.outPoint - c.inPoint));
+      if (clip) {
+        const bc = E.broll[clip.brollIdx];
+        if (curBrollUrl !== bc.url) {
+          curBrollUrl = bc.url;
+          bv.src = bc.url;
+          await new Promise(resolve => {
+            if (bv.readyState >= 1) { resolve(); return; }
+            bv.addEventListener('loadedmetadata', resolve, { once: true });
+          });
+        }
+        const bTime = Math.max(clip.inPoint,
+                       Math.min(clip.outPoint - 0.01, clip.inPoint + (t - clip.trackStart)));
+        await seekTo(bv, bTime);
+        try { if (bv.readyState >= 2) ctx2d.drawImage(bv, 0, 0, W, H); } catch {}
+      }
+
+      // Encode frame
+      const vf = new VideoFrame(canvas, { timestamp: Math.round(t * 1_000_000) });
+      videoEncoder.encode(vf, { keyFrame: i % 90 === 0 });
+      vf.close();
+
+      const pct = Math.min(99, Math.round(i / totalFrames * 100));
+      setProgress(pct);
+      setStatus(`Encoding frame ${i + 1} / ${totalFrames}`);
+
+      // Yield every 10 frames so the UI stays responsive
+      if (i % 10 === 9) await new Promise(r => setTimeout(r, 0));
+    }
+
+    if (videoEncErr) throw videoEncErr;
+    if (audioEncErr) throw audioEncErr;
+
+    // ── Flush + finalize + save ───────────────────────────
     setStatus('Finalizing…');
     await videoEncoder.flush();
     await audioEncoder.flush();
+    if (videoEncErr) throw videoEncErr;
+    if (audioEncErr) throw audioEncErr;
     muxer.finalize();
 
-    // ── Save MP4 ──────────────────────────────────────────
-    setStatus('Saving…');
     const blob = new Blob([target.buffer], { type: 'video/mp4' });
     const url  = URL.createObjectURL(blob);
     const a    = Object.assign(document.createElement('a'),
@@ -1188,12 +1168,6 @@ window.startExport = async () => {
     setStatus(`Export failed: ${err?.message || err}`);
     setProgress(0);
   } finally {
-    captureAudio = false;
-    if (processor) {
-      try { _exportAudioSrc.disconnect(processor); } catch {}
-      try { processor.disconnect(); } catch {}
-    }
-    aVid.pause();
     bv.remove();
     btn.disabled = false;
     updateExportBtn();
