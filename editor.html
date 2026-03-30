@@ -202,14 +202,34 @@
       display: flex; align-items: center; gap: 10px; margin-top: 10px;
     }
     .time-display { font-size: 12px; font-weight: 600; color: var(--muted); min-width: 88px; }
+    .scrubber-wrap { padding: 4px 0 8px; }
     input[type=range].scrubber {
-      flex: 1; height: 4px; -webkit-appearance: none; appearance: none;
-      background: var(--border); border-radius: 2px; cursor: pointer; outline: none;
+      width: 100%; height: 8px; -webkit-appearance: none; appearance: none;
+      background: var(--border); border-radius: 4px; cursor: pointer; outline: none;
     }
     input[type=range].scrubber::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 14px; height: 14px;
+      -webkit-appearance: none; width: 20px; height: 20px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+      box-shadow: 0 0 0 4px rgba(0,71,187,0.22);
+    }
+    /* ── Trim B-Roll Card ── */
+    .trim-card-inner { display: flex; flex-direction: column; gap: 12px; }
+    .trim-nav { display: flex; align-items: center; gap: 10px; }
+    .trim-nav-label { flex: 1; text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); }
+    .trim-preview-wrap { position: relative; background: #000; border-radius: var(--radius-sm); overflow: hidden; }
+    .trim-preview-wrap video { width: 100%; display: block; max-height: 240px; object-fit: contain; }
+    .trim-slider-row { display: flex; flex-direction: column; gap: 6px; }
+    .trim-slider-label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    input[type=range].trim-slider {
+      width: 100%; height: 6px; -webkit-appearance: none; appearance: none;
+      background: var(--border); border-radius: 3px; cursor: pointer; outline: none;
+    }
+    input[type=range].trim-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
       border-radius: 50%; background: var(--accent); cursor: pointer;
     }
+    .trim-summary { font-size: 12px; color: var(--muted); text-align: center; }
+    .trim-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 16px 0; }
 
     /* ── Preview ── */
     .preview-wrap {
@@ -333,16 +353,30 @@
   </div>
 
   <!-- ────────────────────────────────────────────
-       CARD 2 — Timeline
+       CARD 2 — Trim B-Roll Clips
+  ─────────────────────────────────────────────── -->
+  <div class="card" id="trim-card">
+    <div class="card-title">2 · Trim B-Roll Clips</div>
+    <div id="trim-card-body"></div>
+  </div>
+
+  <!-- ────────────────────────────────────────────
+       CARD 3 — Timeline
   ─────────────────────────────────────────────── -->
   <div class="card">
-    <div class="card-title">2 · Arrange on Timeline</div>
+    <div class="card-title">3 · Arrange on Timeline</div>
 
     <div id="tl-no-aroll" class="warn-banner">
       Upload your A-roll video first to enable the timeline.
     </div>
 
     <div id="tl-ui" style="display:none">
+
+      <!-- Scrubber above timeline -->
+      <div class="scrubber-wrap">
+        <input type="range" class="scrubber" id="scrubber" min="0" max="100" step="0.05"
+               value="0" oninput="onScrub(this.value)" onchange="onScrub(this.value)">
+      </div>
 
       <!-- Timeline tracks -->
       <div class="tl-outer" id="tl-outer">
@@ -363,7 +397,7 @@
             </div>
           </div>
           <!-- Playhead overlaps both tracks -->
-          <div class="tl-playhead" id="tl-playhead" style="left:0;top:22px;height:88px"></div>
+          <div class="tl-playhead" id="tl-playhead" style="left:64px;top:22px;height:88px"></div>
         </div>
       </div>
 
@@ -371,8 +405,6 @@
       <div class="playback-row">
         <button class="btn btn-ghost btn-sm" id="play-btn" onclick="togglePlay()">▶ Play</button>
         <span class="time-display" id="time-display">0:00 / 0:00</span>
-        <input type="range" class="scrubber" id="scrubber" min="0" max="100" step="0.05"
-               value="0" oninput="onScrub(this.value)" onchange="onScrub(this.value)">
       </div>
 
       <!-- Trim panel -->
@@ -412,7 +444,7 @@
        CARD 3 — Export
   ─────────────────────────────────────────────── -->
   <div class="card">
-    <div class="card-title">3 · Export</div>
+    <div class="card-title">4 · Export</div>
     <div class="info-banner" style="margin-bottom:12px">
       Export runs in your browser via FFmpeg. <strong>First use downloads ~40MB of FFmpeg</strong> (cached after that).
       Rendering takes 30 seconds – 2 minutes. Works best in Chrome or Firefox.
@@ -432,10 +464,11 @@
 // ── STATE ────────────────────────────────────────────────
 const E = {
   aroll:        null,  // { file, url, duration, name }
-  broll:        [],    // [{ file, url, duration, name, thumb }]
+  broll:        [],    // [{ file, url, duration, name, thumb, inPoint, outPoint }]
   clips:        [],    // [{ brollIdx, trackStart, inPoint, outPoint }]
   selected:     null,  // index into E.clips
   selectedBroll:null,  // index into E.broll (for placement)
+  trimClipIdx:  0,     // index into E.broll for trim card
   playing:      false,
   pxPerSec:     14,    // timeline zoom
 };
@@ -475,12 +508,17 @@ async function generateThumb(url) {
     const c = document.createElement('canvas');
     c.width = 160; c.height = 90;
     v.muted = true; v.playsInline = true; v.preload = 'metadata';
+    // Must be in the DOM for Chrome to decode frames for drawImage
+    Object.assign(v.style, { visibility:'hidden', position:'fixed', width:'1px', height:'1px', top:'-9999px', left:'-9999px' });
+    document.body.appendChild(v);
+
     let settled = false;
     const capture = () => {
       if (settled) return;
       settled = true;
       try { c.getContext('2d').drawImage(v, 0, 0, 160, 90); } catch {}
       v.src = '';
+      if (v.parentNode) v.parentNode.removeChild(v);
       resolve(c.toDataURL('image/jpeg', 0.7));
     };
     v.onloadeddata = () => {
@@ -488,7 +526,7 @@ async function generateThumb(url) {
       if (t > 0.05) { v.currentTime = t; } else { capture(); }
     };
     v.onseeked = capture;
-    v.onerror = () => { settled = true; resolve(null); };
+    v.onerror = () => { settled = true; if (v.parentNode) v.parentNode.removeChild(v); resolve(null); };
     setTimeout(() => { if (!settled) { capture(); } }, 3000);
     v.src = url;
   });
@@ -530,13 +568,14 @@ window.loadBroll = async files => {
     const url = URL.createObjectURL(file);
     const duration = await getVideoDuration(url);
     const thumb = await generateThumb(url);
-    E.broll.push({ file, url, duration, name: file.name, thumb });
+    E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration });
   }
   const zone = document.getElementById('broll-zone');
   zone.classList.add('loaded');
   document.getElementById('broll-info').textContent =
     `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
   renderThumbStrip();
+  renderTrimCard();
 };
 
 // ── THUMBNAIL STRIP ──────────────────────────────────────
@@ -613,8 +652,8 @@ window.onTrackClick = e => {
   E.clips.push({
     brollIdx:   E.selectedBroll,
     trackStart: timePos,
-    inPoint:    0,
-    outPoint:   bclip.duration,
+    inPoint:    bclip.inPoint,
+    outPoint:   bclip.outPoint,
   });
   E.selected = E.clips.length - 1;
   E.selectedBroll = null;
@@ -782,7 +821,85 @@ window.onScrub = val => {
 };
 
 function updatePlayheadPos(t) {
-  document.getElementById('tl-playhead').style.left = (t * E.pxPerSec) + 'px';
+  const LABEL_W = 64;
+  document.getElementById('tl-playhead').style.left = (t * E.pxPerSec + LABEL_W) + 'px';
+}
+
+// ── TRIM B-ROLL CARD ─────────────────────────────────────
+function renderTrimCard() {
+  const body = document.getElementById('trim-card-body');
+  if (!body) return;
+  if (!E.broll.length) {
+    body.innerHTML = '<div class="trim-empty">Load b-roll clips above to trim them.</div>';
+    return;
+  }
+  if (E.trimClipIdx >= E.broll.length) E.trimClipIdx = 0;
+  const b = E.broll[E.trimClipIdx];
+  const dur = b.duration || 0;
+  const inPt = b.inPoint || 0;
+  const outPt = (b.outPoint != null ? b.outPoint : dur);
+  const trimmed = Math.max(0, outPt - inPt).toFixed(1);
+
+  body.innerHTML = `
+    <div class="trim-card-inner">
+      <div class="trim-nav">
+        <button class="btn btn-ghost btn-sm" onclick="trimPrev()" ${E.trimClipIdx === 0 ? 'disabled' : ''}>← Prev</button>
+        <span class="trim-nav-label">Clip ${E.trimClipIdx + 1} of ${E.broll.length} — ${b.name.replace(/\.[^.]+$/,'')}</span>
+        <button class="btn btn-ghost btn-sm" onclick="trimNext()" ${E.trimClipIdx === E.broll.length - 1 ? 'disabled' : ''}>Next →</button>
+      </div>
+      <div class="trim-preview-wrap">
+        <video id="trim-preview" src="${b.url}" muted playsinline preload="metadata"
+               style="cursor:pointer" onclick="this.paused?this.play():this.pause()"></video>
+      </div>
+      <div class="trim-slider-row">
+        <div class="trim-slider-label"><span>In point</span><span id="trim-in-val">${inPt.toFixed(1)}s</span></div>
+        <input type="range" class="trim-slider" id="trim-in-slider"
+               min="0" max="${dur}" step="0.05" value="${inPt}"
+               oninput="onTrimIn(parseFloat(this.value))">
+      </div>
+      <div class="trim-slider-row">
+        <div class="trim-slider-label"><span>Out point</span><span id="trim-out-val">${outPt.toFixed(1)}s</span></div>
+        <input type="range" class="trim-slider" id="trim-out-slider"
+               min="0" max="${dur}" step="0.05" value="${outPt}"
+               oninput="onTrimOut(parseFloat(this.value))">
+      </div>
+      <div class="trim-summary" id="trim-summary">
+        Trimmed: ${inPt.toFixed(1)}s – ${outPt.toFixed(1)}s &nbsp;(${trimmed}s used)
+      </div>
+    </div>`;
+
+  // Seek the preview to inPoint after metadata loads
+  const vid = document.getElementById('trim-preview');
+  vid.addEventListener('loadedmetadata', () => { vid.currentTime = inPt; }, { once: true });
+}
+
+window.trimPrev = function() {
+  if (E.trimClipIdx > 0) { E.trimClipIdx--; renderTrimCard(); }
+};
+window.trimNext = function() {
+  if (E.trimClipIdx < E.broll.length - 1) { E.trimClipIdx++; renderTrimCard(); }
+};
+window.onTrimIn = function(val) {
+  const b = E.broll[E.trimClipIdx];
+  val = Math.min(val, b.outPoint - 0.1);
+  b.inPoint = val;
+  document.getElementById('trim-in-val').textContent = val.toFixed(1) + 's';
+  const vid = document.getElementById('trim-preview');
+  if (vid) vid.currentTime = val;
+  _updateTrimSummary();
+};
+window.onTrimOut = function(val) {
+  const b = E.broll[E.trimClipIdx];
+  val = Math.max(val, b.inPoint + 0.1);
+  b.outPoint = val;
+  document.getElementById('trim-out-val').textContent = val.toFixed(1) + 's';
+  _updateTrimSummary();
+};
+function _updateTrimSummary() {
+  const b = E.broll[E.trimClipIdx];
+  const trimmed = Math.max(0, b.outPoint - b.inPoint).toFixed(1);
+  const el = document.getElementById('trim-summary');
+  if (el) el.innerHTML = `Trimmed: ${b.inPoint.toFixed(1)}s – ${b.outPoint.toFixed(1)}s &nbsp;(${trimmed}s used)`;
 }
 
 // ── EXPORT ───────────────────────────────────────────────
