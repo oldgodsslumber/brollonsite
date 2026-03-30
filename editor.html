@@ -438,11 +438,10 @@
   <div class="card">
     <div class="card-title">4 · Export</div>
     <div class="info-banner" style="margin-bottom:12px">
-      Export runs in your browser via FFmpeg. <strong>First use downloads ~40MB of FFmpeg</strong> (cached after that).
-      Rendering takes 30 seconds – 2 minutes. Works best in Chrome or Firefox.
+      Export plays your timeline at normal speed and records the result — no downloads needed. Works on Chrome, Firefox, and Safari.
     </div>
     <button class="btn btn-primary btn-full" id="export-btn" onclick="startExport()" disabled>
-      ⬇ Export MP4
+      ⬇ Export Video
     </button>
     <div class="export-status" id="export-status">Upload footage and place at least one b-roll clip to export.</div>
     <div class="progress-track" id="progress-track">
@@ -989,116 +988,164 @@ function setProgress(pct) {
   fill.style.width = pct + '%';
 }
 
+// Audio context kept alive for the page session — createMediaElementSource
+// can only be called once per element, so we cache it here.
+let _audioCtx = null;
+let _audioSrc = null;
+
 window.startExport = async () => {
   if (!E.aroll || E.clips.length === 0) return;
   const btn = document.getElementById('export-btn');
   btn.disabled = true;
   setProgress(1);
-  setStatus('Loading FFmpeg (first time: ~40MB download)…');
+  setStatus('Preparing export…');
+
+  // Stop timeline playback if running
+  if (E.playing) togglePlay();
+
+  const aVid = document.getElementById('aroll-preview');
+  const W = E.aroll.width  || 1920;
+  const H = E.aroll.height || 1080;
+  const duration = E.aroll.duration;
+
+  // Compositing canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Hidden video element for b-roll playback during export
+  const bv = document.createElement('video');
+  bv.muted = true; bv.playsInline = true;
+  Object.assign(bv.style, { position:'fixed', top:'-9999px', left:'-9999px',
+                             width:'1px', height:'1px', visibility:'hidden' });
+  document.body.appendChild(bv);
 
   try {
-    const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/esm/index.js');
-    const { fetchFile, toBlobURL } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js');
+    // ── Canvas stream ────────────────────────────────────
+    const canvasStream = canvas.captureStream(30);
 
-    const ffmpeg = new FFmpeg();
-    ffmpeg.on('progress', ({ progress }) => {
-      const pct = Math.min(99, Math.round(progress * 100));
-      setProgress(pct);
-      setStatus(`Rendering… ${pct}%`);
-    });
-    ffmpeg.on('log', ({ message }) => console.log('[ffmpeg]', message));
-
-    setStatus('Loading FFmpeg core (~30MB, one-time download)…');
-    // Use single-threaded core — works without SharedArrayBuffer / COOP headers,
-    // more reliable across browsers and deployment environments.
-    const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`,   'text/javascript'),
-      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-
-    setStatus('Writing input files…');
-    await ffmpeg.writeFile('aroll.mp4', await fetchFile(E.aroll.file));
-
-    // Unique b-roll files used
-    const usedIdxs = [...new Set(E.clips.map(c => c.brollIdx))];
-    for (const idx of usedIdxs) {
-      setStatus(`Loading b-roll ${usedIdxs.indexOf(idx) + 1}/${usedIdxs.length}…`);
-      await ffmpeg.writeFile(`br${idx}.mp4`, await fetchFile(E.broll[idx].file));
+    // ── Audio capture ────────────────────────────────────
+    // Chrome: captureStream() on the video element grabs the audio track.
+    // Safari: Web Audio API — createMediaElementSource can only be called
+    // once per element, so we cache the context/source at module level.
+    try {
+      if (typeof aVid.captureStream === 'function') {
+        // Chrome / Firefox
+        const avStream = aVid.captureStream();
+        avStream.getAudioTracks().forEach(t => canvasStream.addTrack(t.clone()));
+      } else {
+        // Safari
+        if (!_audioCtx) {
+          _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          _audioSrc = _audioCtx.createMediaElementSource(aVid);
+          _audioSrc.connect(_audioCtx.destination); // keep speakers working
+        }
+        if (_audioCtx.state === 'suspended') await _audioCtx.resume();
+        const dest = _audioCtx.createMediaStreamDestination();
+        _audioSrc.connect(dest);
+        dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+      }
+    } catch (e) {
+      console.warn('[export] audio capture unavailable, exporting video-only:', e);
     }
 
-    // Build FFmpeg args
-    // Inputs: aroll first, then each unique broll
-    const inputs = ['-i', 'aroll.mp4'];
-    usedIdxs.forEach(idx => inputs.push('-i', `br${idx}.mp4`));
+    // ── MediaRecorder ─────────────────────────────────────
+    const mimeType = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+    ].find(m => MediaRecorder.isTypeSupported(m));
+    if (!mimeType) throw new Error('MediaRecorder not supported — please use Chrome, Firefox, or Safari 14+.');
 
-    // Build filter_complex: trim each broll clip then overlay in sequence.
-    // Sort clips chronologically so the chain is built left-to-right.
-    const sortedClips = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
-    const parts = [];
-    let prevOut = '0:v';
-    const W = E.aroll.width, H = E.aroll.height;
+    const recorder = new MediaRecorder(canvasStream, { mimeType });
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data?.size > 0) chunks.push(e.data); };
 
-    sortedClips.forEach((clip, i) => {
-      const inputIdx = usedIdxs.indexOf(clip.brollIdx) + 1; // +1 because 0=aroll
-      const dur = clip.outPoint - clip.inPoint;
-      const ts  = clip.trackStart;
-      const te  = ts + dur;
-      const isLast = i === sortedClips.length - 1;
-      const bLabel = `[bt${i}]`;
-      const outLabel = isLast ? '[vout]' : `[ov${i}]`;
-
-      // Trim b-roll, reset timestamps, scale to a-roll dimensions, force yuv420p
-      // so the overlay filter always receives a compatible pixel format.
-      parts.push(
-        `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},` +
-        `setpts=PTS-STARTPTS,scale=${W}:${H},format=yuv420p${bLabel}`
-      );
-      // Overlay onto growing chain, enable only during clip's timeline window
-      parts.push(
-        `[${prevOut}]${bLabel}overlay=enable='between(t,${ts.toFixed(3)},${te.toFixed(3)})':x=0:y=0${outLabel}`
-      );
-      prevOut = `ov${i}`;
+    const recordingDone = new Promise((resolve, reject) => {
+      recorder.onstop  = resolve;
+      recorder.onerror = e => reject(new Error(e.error?.message || 'recorder error'));
     });
 
-    setStatus('Compositing video…');
-    console.log('[export] filter_complex:', parts.join(';'));
+    // ── Seek A-roll to start ──────────────────────────────
+    aVid.currentTime = 0;
+    await new Promise(resolve => {
+      if (aVid.readyState >= 2) { resolve(); return; }
+      aVid.addEventListener('loadeddata', resolve, { once: true });
+    });
 
-    const args = [
-      ...inputs,
-      '-filter_complex', parts.join(';'),
-      '-map', '[vout]',
-      '-map', '0:a?',        // optional audio — works even if no audio track
-      '-c:v', 'libx264',
-      '-preset', 'fast',
-      '-crf', '23',
-      '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac',
-      '-b:a', '128k',
-      '-movflags', '+faststart',
-      'out.mp4',
-    ];
+    recorder.start(100); // flush chunks every 100ms
 
-    await ffmpeg.exec(args);
+    const sortedClips = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
+    let exportStopped = false;
 
-    setStatus('Saving file…');
-    const data = await ffmpeg.readFile('out.mp4');
-    const blob = new Blob([data.buffer], { type: 'video/mp4' });
+    // ── Draw loop ─────────────────────────────────────────
+    const drawFrame = () => {
+      if (exportStopped) return;
+      const t = aVid.currentTime;
+
+      // A-roll frame
+      try { ctx.drawImage(aVid, 0, 0, W, H); } catch {}
+
+      // B-roll overlay
+      const clip = sortedClips.find(c => {
+        const d = c.outPoint - c.inPoint;
+        return t >= c.trackStart && t < c.trackStart + d;
+      });
+      if (clip) {
+        const bc = E.broll[clip.brollIdx];
+        if (bv.dataset.exportUrl !== bc.url) {
+          bv.dataset.exportUrl = bc.url;
+          bv.src = bc.url; bv.load();
+          bv.currentTime = clip.inPoint;
+          bv.play().catch(() => {});
+        } else {
+          const expected = clip.inPoint + (t - clip.trackStart);
+          if (Math.abs(bv.currentTime - expected) > 0.3) bv.currentTime = expected;
+          if (bv.paused && !bv.ended) bv.play().catch(() => {});
+        }
+        try { if (bv.readyState >= 2) ctx.drawImage(bv, 0, 0, W, H); } catch {}
+      } else {
+        if (!bv.paused) bv.pause();
+      }
+
+      const pct = Math.min(99, Math.round(t / duration * 100));
+      setProgress(pct);
+      setStatus(`Exporting… ${pct}%  (${fmtDur(Math.max(0, duration - t))} remaining)`);
+
+      if (aVid.ended || t >= duration - 0.05) {
+        exportStopped = true;
+        setTimeout(() => recorder.stop(), 300); // flush last frames
+      } else {
+        requestAnimationFrame(drawFrame);
+      }
+    };
+
+    aVid.play();
+    requestAnimationFrame(drawFrame);
+    await recordingDone;
+
+    // ── Save file ─────────────────────────────────────────
+    setStatus('Saving…');
+    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType });
     const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement('a'), { href: url, download: 'broll-edit.mp4' });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const ext  = (recorder.mimeType || mimeType).includes('mp4') ? 'mp4' : 'webm';
+    const a    = Object.assign(document.createElement('a'),
+                               { href: url, download: `broll-edit.${ext}` });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
 
     setProgress(100);
     setStatus('✓ Export complete! Check your downloads folder.');
-    setTimeout(() => setProgress(0), 2000);
+    setTimeout(() => setProgress(0), 3000);
 
   } catch (err) {
     console.error('[export]', err);
-    const msg = err?.message || String(err);
-    setStatus(`Export failed: ${msg} — check the browser console (F12) for details.`);
+    setStatus(`Export failed: ${err?.message || err}`);
     setProgress(0);
   } finally {
+    bv.remove();
     btn.disabled = false;
     updateExportBtn();
   }
