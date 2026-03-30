@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
   <title>Film Kit — Video Editor</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,7 +25,7 @@
     body {
       background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 15px; line-height: 1.5;
+      font-size: 15px; line-height: 1.5; touch-action: manipulation;
     }
 
     /* ── Header ── */
@@ -243,23 +243,14 @@
     #broll-overlay { opacity: 0; transition: opacity .08s; }
 
     /* ── Trim panel ── */
-    .trim-panel {
+    .clip-panel {
       background: var(--surf2); border: 1px solid var(--border);
       border-radius: var(--radius-sm); padding: 12px; margin-top: 10px;
     }
-    .trim-panel-hdr {
-      font-size: 11px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px;
+    .place-hint {
+      text-align: center; font-size: 13px; font-weight: 600;
+      color: var(--accent); padding: 10px 0 2px; letter-spacing: .01em;
     }
-    .trim-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .trim-field { display: flex; flex-direction: column; gap: 2px; }
-    .trim-field label { font-size: 10px; color: var(--muted); }
-    .trim-field input[type=number] {
-      width: 72px; padding: 5px 8px; font-size: 13px;
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); font-family: inherit; outline: none;
-    }
-    .trim-field input[type=number]:focus { border-color: var(--accent); }
 
     /* ── Export ── */
     .export-status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
@@ -407,24 +398,20 @@
         <span class="time-display" id="time-display">0:00 / 0:00</span>
       </div>
 
-      <!-- Trim panel -->
-      <div class="trim-panel" id="trim-panel" style="display:none">
-        <div class="trim-panel-hdr" id="trim-panel-hdr">Selected clip</div>
-        <div class="trim-row">
-          <div class="trim-field">
-            <label>In-point (s)</label>
-            <input type="number" id="trim-in" min="0" step="0.1" oninput="applyTrim()">
-          </div>
-          <div class="trim-field">
-            <label>Out-point (s)</label>
-            <input type="number" id="trim-out" min="0" step="0.1" oninput="applyTrim()">
-          </div>
-          <div class="trim-field">
-            <label>Starts at (s)</label>
-            <input type="number" id="trim-track-start" min="0" step="0.1" oninput="applyTrim()">
-          </div>
-          <button class="btn btn-danger btn-sm" onclick="deleteClip()" style="align-self:flex-end">🗑 Remove</button>
+      <!-- Clip panel (shown when a placed clip is selected) -->
+      <div class="clip-panel" id="clip-panel" style="display:none">
+        <div class="trim-slider-row">
+          <div class="trim-slider-label"><span>In point</span><span id="cp-in-val">0.0s</span></div>
+          <input type="range" class="trim-slider" id="cp-in-slider"
+                 min="0" max="0" step="0.05" oninput="onClipIn(parseFloat(this.value))">
         </div>
+        <div class="trim-slider-row">
+          <div class="trim-slider-label"><span>Out point</span><span id="cp-out-val">0.0s</span></div>
+          <input type="range" class="trim-slider" id="cp-out-slider"
+                 min="0" max="0" step="0.05" oninput="onClipOut(parseFloat(this.value))">
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteClip()"
+                style="margin-top:10px;width:100%">🗑 Delete B-roll Clip</button>
       </div>
 
       <!-- Preview -->
@@ -434,8 +421,7 @@
       </div>
 
       <p class="tip-inline">
-        <strong>Tip:</strong> Select a b-roll clip from the rack, tap the B-Roll track to place it.
-        Drag placed clips to reposition. Tap a placed clip to trim its in/out points or remove it.
+        <strong>Tip:</strong> Select a b-roll clip from the rack above, then tap the B-Roll track to place it. Drag placed clips to reposition. Tap a placed clip to adjust or delete it.
       </p>
     </div>
   </div>
@@ -492,12 +478,16 @@ function fmtDur(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
-function getVideoDuration(url) {
+function getVideoMeta(url) {
   return new Promise(resolve => {
     const v = document.createElement('video');
     v.preload = 'metadata';
-    v.onloadedmetadata = () => resolve(v.duration);
-    v.onerror = () => resolve(0);
+    v.onloadedmetadata = () => resolve({
+      duration: v.duration,
+      width:    v.videoWidth  || 1920,
+      height:   v.videoHeight || 1080,
+    });
+    v.onerror = () => resolve({ duration: 0, width: 1920, height: 1080 });
     v.src = url;
   });
 }
@@ -542,13 +532,13 @@ window.loadAroll = async file => {
   }
   if (E.aroll) URL.revokeObjectURL(E.aroll.url);
   const url = URL.createObjectURL(file);
-  const duration = await getVideoDuration(url);
-  E.aroll = { file, url, duration, name: file.name };
+  const meta = await getVideoMeta(url);
+  E.aroll = { file, url, duration: meta.duration, width: meta.width, height: meta.height, name: file.name };
 
   const zone = document.getElementById('aroll-zone');
   zone.classList.add('loaded');
   document.getElementById('aroll-info').textContent =
-    `✓ ${file.name} · ${fmtDur(duration)}`;
+    `✓ ${file.name} · ${fmtDur(meta.duration)} · ${meta.width}×${meta.height}`;
 
   const vid = document.getElementById('aroll-preview');
   vid.src = url; vid.load();
@@ -566,7 +556,7 @@ window.loadBroll = async files => {
   }
   for (const file of list) {
     const url = URL.createObjectURL(file);
-    const duration = await getVideoDuration(url);
+    const { duration } = await getVideoMeta(url);
     const thumb = await generateThumb(url);
     E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration });
   }
@@ -599,9 +589,13 @@ function renderThumbStrip() {
 window.selectBroll = i => {
   E.selectedBroll = E.selectedBroll === i ? null : i;
   E.selected = null;
+  if (E.selectedBroll !== null) {
+    E.trimClipIdx = E.selectedBroll;
+    renderTrimCard();
+  }
   renderThumbStrip();
   renderClips();
-  hideTrimPanel();
+  hideClipPanel();
 };
 
 // ── TIMELINE ─────────────────────────────────────────────
@@ -660,7 +654,7 @@ window.onTrackClick = e => {
 
   renderThumbStrip();
   renderClips();
-  showTrimPanel();
+  showClipPanel();
   updateExportBtn();
 };
 
@@ -690,7 +684,7 @@ function renderClips() {
       E.selectedBroll = null;
       renderThumbStrip();
       renderClips();
-      showTrimPanel();
+      showClipPanel();
     });
 
     track.appendChild(el);
@@ -701,51 +695,64 @@ function renderClips() {
 
 // ── CLIP DRAG ────────────────────────────────────────────
 let _drag = null;
+let _dragActive = false;
 function startDrag(e) {
   _drag = {
-    idx:   parseInt(e.currentTarget.dataset.idx),
-    startX: e.clientX,
+    idx:       parseInt(e.currentTarget.dataset.idx),
+    startX:    e.clientX,
     origStart: E.clips[parseInt(e.currentTarget.dataset.idx)].trackStart,
+    el:        e.currentTarget,
+    pointerId: e.pointerId,
   };
-  e.currentTarget.setPointerCapture(e.pointerId);
-  e.preventDefault();
+  _dragActive = false;
+  e.stopPropagation(); // prevent onTrackClick from firing
 }
 document.addEventListener('pointermove', e => {
   if (!_drag) return;
-  const dt = (e.clientX - _drag.startX) / E.pxPerSec;
+  const dx = e.clientX - _drag.startX;
+  if (!_dragActive) {
+    if (Math.abs(dx) < 6) return;
+    _dragActive = true;
+    try { _drag.el.setPointerCapture(_drag.pointerId); } catch {}
+  }
+  const dt = dx / E.pxPerSec;
   E.clips[_drag.idx].trackStart = Math.max(0, Math.round((_drag.origStart + dt) * 10) / 10);
   renderClips();
-  if (E.selected === _drag.idx) fillTrimInputs();
+  if (E.selected === _drag.idx) showClipPanel();
 });
-document.addEventListener('pointerup', () => { _drag = null; });
+document.addEventListener('pointerup', () => { _drag = null; _dragActive = false; });
 
-// ── TRIM PANEL ───────────────────────────────────────────
-function showTrimPanel() {
-  if (E.selected === null) return;
+// ── CLIP PANEL ────────────────────────────────────────────
+function showClipPanel() {
+  if (E.selected === null) { hideClipPanel(); return; }
   const clip = E.clips[E.selected];
   const b = E.broll[clip.brollIdx];
-  document.getElementById('trim-panel').style.display = '';
-  document.getElementById('trim-panel-hdr').textContent =
-    `Clip: ${b.name.replace(/\.[^.]+$/, '')} (max ${fmtDur(b.duration)})`;
-  fillTrimInputs();
+  document.getElementById('clip-panel').style.display = '';
+  const inS = document.getElementById('cp-in-slider');
+  inS.max = b.duration; inS.value = clip.inPoint;
+  document.getElementById('cp-in-val').textContent = clip.inPoint.toFixed(1) + 's';
+  const outS = document.getElementById('cp-out-slider');
+  outS.max = b.duration; outS.value = clip.outPoint;
+  document.getElementById('cp-out-val').textContent = clip.outPoint.toFixed(1) + 's';
 }
-function hideTrimPanel() { document.getElementById('trim-panel').style.display = 'none'; }
+function hideClipPanel() { document.getElementById('clip-panel').style.display = 'none'; }
 
-function fillTrimInputs() {
-  const c = E.clips[E.selected];
-  document.getElementById('trim-in').value = c.inPoint.toFixed(1);
-  document.getElementById('trim-out').value = c.outPoint.toFixed(1);
-  document.getElementById('trim-track-start').value = c.trackStart.toFixed(1);
-}
-
-window.applyTrim = () => {
+window.onClipIn = function(val) {
   if (E.selected === null) return;
-  const c = E.clips[E.selected];
-  const b = E.broll[c.brollIdx];
-  c.inPoint    = Math.max(0, parseFloat(document.getElementById('trim-in').value) || 0);
-  c.outPoint   = Math.min(b.duration, parseFloat(document.getElementById('trim-out').value) || b.duration);
-  c.trackStart = Math.max(0, parseFloat(document.getElementById('trim-track-start').value) || 0);
-  if (c.inPoint >= c.outPoint) c.outPoint = Math.min(c.inPoint + 0.5, b.duration);
+  const clip = E.clips[E.selected];
+  val = Math.min(val, clip.outPoint - 0.1);
+  clip.inPoint = val;
+  document.getElementById('cp-in-slider').value = val;
+  document.getElementById('cp-in-val').textContent = val.toFixed(1) + 's';
+  renderClips();
+};
+window.onClipOut = function(val) {
+  if (E.selected === null) return;
+  const clip = E.clips[E.selected];
+  val = Math.max(val, clip.inPoint + 0.1);
+  clip.outPoint = val;
+  document.getElementById('cp-out-slider').value = val;
+  document.getElementById('cp-out-val').textContent = val.toFixed(1) + 's';
   renderClips();
 };
 
@@ -753,7 +760,7 @@ window.deleteClip = () => {
   if (E.selected === null) return;
   E.clips.splice(E.selected, 1);
   E.selected = null;
-  hideTrimPanel();
+  hideClipPanel();
   renderClips();
   updateExportBtn();
 };
@@ -866,6 +873,7 @@ function renderTrimCard() {
       <div class="trim-summary" id="trim-summary">
         Trimmed: ${inPt.toFixed(1)}s – ${outPt.toFixed(1)}s &nbsp;(${trimmed}s used)
       </div>
+      <div class="place-hint">👇 Tap the timeline below to place this clip</div>
     </div>`;
 
   // Seek the preview to inPoint after metadata loads
@@ -881,8 +889,9 @@ window.trimNext = function() {
 };
 window.onTrimIn = function(val) {
   const b = E.broll[E.trimClipIdx];
-  val = Math.min(val, b.outPoint - 0.1);
+  val = Math.min(val, (b.outPoint ?? b.duration) - 0.1);
   b.inPoint = val;
+  document.getElementById('trim-in-slider').value = val;
   document.getElementById('trim-in-val').textContent = val.toFixed(1) + 's';
   const vid = document.getElementById('trim-preview');
   if (vid) vid.currentTime = val;
@@ -892,7 +901,10 @@ window.onTrimOut = function(val) {
   const b = E.broll[E.trimClipIdx];
   val = Math.max(val, b.inPoint + 0.1);
   b.outPoint = val;
+  document.getElementById('trim-out-slider').value = val;
   document.getElementById('trim-out-val').textContent = val.toFixed(1) + 's';
+  const vid = document.getElementById('trim-preview');
+  if (vid) vid.currentTime = val;
   _updateTrimSummary();
 };
 function _updateTrimSummary() {
@@ -978,9 +990,11 @@ window.startExport = async () => {
       const bLabel = `[bt${i}]`;
       const outLabel = isLast ? '[vout]' : `[ov${i}]`;
 
-      // Trim b-roll to in/out window and reset timestamps
+      // Trim b-roll, reset timestamps, scale to match a-roll canvas
+      const W = E.aroll.width, H = E.aroll.height;
       parts.push(
-        `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},setpts=PTS-STARTPTS${bLabel}`
+        `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},setpts=PTS-STARTPTS,` +
+        `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2${bLabel}`
       );
       // Overlay onto growing chain, enable only during clip's timeline window
       parts.push(
