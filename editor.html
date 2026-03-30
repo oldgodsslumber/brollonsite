@@ -438,7 +438,7 @@
   <div class="card">
     <div class="card-title">4 · Export</div>
     <div class="info-banner" style="margin-bottom:12px">
-      Export plays your timeline at normal speed and records the result — no downloads needed. Works on Chrome, Firefox, and Safari.
+      Export plays your timeline at normal speed and saves an MP4. Works on Chrome, Firefox, and Safari.
     </div>
     <button class="btn btn-primary btn-full" id="export-btn" onclick="startExport()" disabled>
       ⬇ Export Video
@@ -988,10 +988,9 @@ function setProgress(pct) {
   fill.style.width = pct + '%';
 }
 
-// Audio context kept alive for the page session — createMediaElementSource
-// can only be called once per element, so we cache it here.
-let _audioCtx = null;
-let _audioSrc = null;
+// Audio context — createMediaElementSource can only be called once per element
+let _exportAudioCtx = null;
+let _exportAudioSrc = null;
 
 window.startExport = async () => {
   if (!E.aroll || E.clips.length === 0) return;
@@ -1000,7 +999,6 @@ window.startExport = async () => {
   setProgress(1);
   setStatus('Preparing export…');
 
-  // Stop timeline playback if running
   if (E.playing) togglePlay();
 
   const aVid = document.getElementById('aroll-preview');
@@ -1008,65 +1006,96 @@ window.startExport = async () => {
   const H = E.aroll.height || 1080;
   const duration = E.aroll.duration;
 
-  // Compositing canvas
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // Hidden video element for b-roll playback during export
   const bv = document.createElement('video');
   bv.muted = true; bv.playsInline = true;
   Object.assign(bv.style, { position:'fixed', top:'-9999px', left:'-9999px',
                              width:'1px', height:'1px', visibility:'hidden' });
   document.body.appendChild(bv);
 
-  try {
-    // ── Canvas stream ────────────────────────────────────
-    const canvasStream = canvas.captureStream(30);
+  let processor    = null;
+  let captureAudio = false;
 
-    // ── Audio capture ────────────────────────────────────
-    // Chrome: captureStream() on the video element grabs the audio track.
-    // Safari: Web Audio API — createMediaElementSource can only be called
-    // once per element, so we cache the context/source at module level.
-    try {
-      if (typeof aVid.captureStream === 'function') {
-        // Chrome / Firefox
-        const avStream = aVid.captureStream();
-        avStream.getAudioTracks().forEach(t => canvasStream.addTrack(t.clone()));
-      } else {
-        // Safari
-        if (!_audioCtx) {
-          _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          _audioSrc = _audioCtx.createMediaElementSource(aVid);
-          _audioSrc.connect(_audioCtx.destination); // keep speakers working
-        }
-        if (_audioCtx.state === 'suspended') await _audioCtx.resume();
-        const dest = _audioCtx.createMediaStreamDestination();
-        _audioSrc.connect(dest);
-        dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-      }
-    } catch (e) {
-      console.warn('[export] audio capture unavailable, exporting video-only:', e);
+  try {
+    // ── Require WebCodecs ─────────────────────────────────
+    if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
+      throw new Error('WebCodecs not supported. Please use Chrome 94+, Firefox 130+, or Safari 17.4+.');
     }
 
-    // ── MediaRecorder ─────────────────────────────────────
-    const mimeType = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-      'video/mp4;codecs=avc1',
-      'video/mp4',
-    ].find(m => MediaRecorder.isTypeSupported(m));
-    if (!mimeType) throw new Error('MediaRecorder not supported — please use Chrome, Firefox, or Safari 14+.');
+    // ── Audio context (created once per page load) ────────
+    if (!_exportAudioCtx) {
+      _exportAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      _exportAudioSrc = _exportAudioCtx.createMediaElementSource(aVid);
+      _exportAudioSrc.connect(_exportAudioCtx.destination); // keep speakers on
+    }
+    if (_exportAudioCtx.state === 'suspended') await _exportAudioCtx.resume();
 
-    const recorder = new MediaRecorder(canvasStream, { mimeType });
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data?.size > 0) chunks.push(e.data); };
+    const SAMPLE_RATE = _exportAudioCtx.sampleRate;
+    const N_CH = 2;
 
-    const recordingDone = new Promise((resolve, reject) => {
-      recorder.onstop  = resolve;
-      recorder.onerror = e => reject(new Error(e.error?.message || 'recorder error'));
+    // ── Load mp4-muxer ────────────────────────────────────
+    const { Muxer, ArrayBufferTarget } = await import(
+      'https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.mjs'
+    );
+    const target = new ArrayBufferTarget();
+    const muxer  = new Muxer({
+      target,
+      video: { codec: 'avc', width: W, height: H },
+      audio: { codec: 'aac', numberOfChannels: N_CH, sampleRate: SAMPLE_RATE },
+      fastStart: 'in-memory',
     });
+
+    // ── Video encoder (H.264) ─────────────────────────────
+    const videoEncoder = new VideoEncoder({
+      output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+      error:  e => console.error('[VideoEncoder]', e),
+    });
+    videoEncoder.configure({
+      codec:     'avc1.640028', // H.264 High Profile Level 4.0 — up to 1080p
+      width:     W,
+      height:    H,
+      bitrate:   5_000_000,
+      framerate: 30,
+    });
+
+    // ── Audio encoder (AAC-LC) ────────────────────────────
+    const audioEncoder = new AudioEncoder({
+      output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+      error:  e => console.error('[AudioEncoder]', e),
+    });
+    audioEncoder.configure({
+      codec:            'mp4a.40.2',
+      numberOfChannels: N_CH,
+      sampleRate:       SAMPLE_RATE,
+      bitrate:          128_000,
+    });
+
+    // ── Audio capture via ScriptProcessorNode ─────────────
+    let audioTsUs = 0;
+    processor = _exportAudioCtx.createScriptProcessor(2048, N_CH, N_CH);
+    _exportAudioSrc.connect(processor);
+    processor.connect(_exportAudioCtx.destination);
+    processor.onaudioprocess = e => {
+      if (!captureAudio) return;
+      const ch0 = e.inputBuffer.getChannelData(0);
+      const ch1 = e.inputBuffer.getChannelData(1);
+      const buf = new Float32Array(ch0.length * 2);
+      buf.set(ch0, 0);
+      buf.set(ch1, ch0.length);
+      try {
+        const frame = new AudioData({
+          format: 'f32-planar', sampleRate: SAMPLE_RATE,
+          numberOfFrames: ch0.length, numberOfChannels: N_CH,
+          timestamp: audioTsUs, data: buf,
+        });
+        audioTsUs += Math.round(ch0.length / SAMPLE_RATE * 1_000_000);
+        audioEncoder.encode(frame);
+        frame.close();
+      } catch {}
+    };
 
     // ── Seek A-roll to start ──────────────────────────────
     aVid.currentTime = 0;
@@ -1075,64 +1104,78 @@ window.startExport = async () => {
       aVid.addEventListener('loadeddata', resolve, { once: true });
     });
 
-    recorder.start(100); // flush chunks every 100ms
-
+    // ── Draw + encode loop ────────────────────────────────
     const sortedClips = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
-    let exportStopped = false;
+    let frameCount = 0;
 
-    // ── Draw loop ─────────────────────────────────────────
-    const drawFrame = () => {
-      if (exportStopped) return;
-      const t = aVid.currentTime;
+    await new Promise(resolve => {
+      let stopped = false;
+      const stop = () => { if (!stopped) { stopped = true; resolve(); } };
 
-      // A-roll frame
-      try { ctx.drawImage(aVid, 0, 0, W, H); } catch {}
+      const drawFrame = () => {
+        if (stopped) return;
+        const t = aVid.currentTime;
 
-      // B-roll overlay
-      const clip = sortedClips.find(c => {
-        const d = c.outPoint - c.inPoint;
-        return t >= c.trackStart && t < c.trackStart + d;
-      });
-      if (clip) {
-        const bc = E.broll[clip.brollIdx];
-        if (bv.dataset.exportUrl !== bc.url) {
-          bv.dataset.exportUrl = bc.url;
-          bv.src = bc.url; bv.load();
-          bv.currentTime = clip.inPoint;
-          bv.play().catch(() => {});
+        try { ctx.drawImage(aVid, 0, 0, W, H); } catch {}
+
+        const clip = sortedClips.find(c => {
+          const d = c.outPoint - c.inPoint;
+          return t >= c.trackStart && t < c.trackStart + d;
+        });
+        if (clip) {
+          const bc = E.broll[clip.brollIdx];
+          if (bv.dataset.exportUrl !== bc.url) {
+            bv.dataset.exportUrl = bc.url;
+            bv.src = bc.url; bv.load();
+            bv.currentTime = clip.inPoint;
+            bv.play().catch(() => {});
+          } else {
+            const expected = clip.inPoint + (t - clip.trackStart);
+            if (Math.abs(bv.currentTime - expected) > 0.3) bv.currentTime = expected;
+            if (bv.paused && !bv.ended) bv.play().catch(() => {});
+          }
+          try { if (bv.readyState >= 2) ctx.drawImage(bv, 0, 0, W, H); } catch {}
         } else {
-          const expected = clip.inPoint + (t - clip.trackStart);
-          if (Math.abs(bv.currentTime - expected) > 0.3) bv.currentTime = expected;
-          if (bv.paused && !bv.ended) bv.play().catch(() => {});
+          if (!bv.paused) bv.pause();
         }
-        try { if (bv.readyState >= 2) ctx.drawImage(bv, 0, 0, W, H); } catch {}
-      } else {
-        if (!bv.paused) bv.pause();
-      }
 
-      const pct = Math.min(99, Math.round(t / duration * 100));
-      setProgress(pct);
-      setStatus(`Exporting… ${pct}%  (${fmtDur(Math.max(0, duration - t))} remaining)`);
+        // Encode video frame
+        try {
+          const vf = new VideoFrame(canvas, { timestamp: Math.round(t * 1_000_000) });
+          videoEncoder.encode(vf, { keyFrame: frameCount % 90 === 0 });
+          vf.close();
+          frameCount++;
+        } catch {}
 
-      if (aVid.ended || t >= duration - 0.05) {
-        exportStopped = true;
-        setTimeout(() => recorder.stop(), 300); // flush last frames
-      } else {
-        requestAnimationFrame(drawFrame);
-      }
-    };
+        const pct = Math.min(99, Math.round(t / duration * 100));
+        setProgress(pct);
+        setStatus(`Exporting… ${pct}%  (${fmtDur(Math.max(0, duration - t))} remaining)`);
 
-    aVid.play();
-    requestAnimationFrame(drawFrame);
-    await recordingDone;
+        if (aVid.ended || t >= duration - 0.05) {
+          setTimeout(stop, 500); // let last frames land
+        } else {
+          requestAnimationFrame(drawFrame);
+        }
+      };
 
-    // ── Save file ─────────────────────────────────────────
+      captureAudio = true;
+      aVid.play();
+      requestAnimationFrame(drawFrame);
+    });
+
+    // ── Flush + mux ───────────────────────────────────────
+    captureAudio = false;
+    setStatus('Finalizing…');
+    await videoEncoder.flush();
+    await audioEncoder.flush();
+    muxer.finalize();
+
+    // ── Save MP4 ──────────────────────────────────────────
     setStatus('Saving…');
-    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType });
+    const blob = new Blob([target.buffer], { type: 'video/mp4' });
     const url  = URL.createObjectURL(blob);
-    const ext  = (recorder.mimeType || mimeType).includes('mp4') ? 'mp4' : 'webm';
     const a    = Object.assign(document.createElement('a'),
-                               { href: url, download: `broll-edit.${ext}` });
+                               { href: url, download: 'broll-edit.mp4' });
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
 
@@ -1145,6 +1188,12 @@ window.startExport = async () => {
     setStatus(`Export failed: ${err?.message || err}`);
     setProgress(0);
   } finally {
+    captureAudio = false;
+    if (processor) {
+      try { _exportAudioSrc.disconnect(processor); } catch {}
+      try { processor.disconnect(); } catch {}
+    }
+    aVid.pause();
     bv.remove();
     btn.disabled = false;
     updateExportBtn();
