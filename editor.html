@@ -836,17 +836,21 @@ window.placeAtIndicator = function() {
   if (!E.aroll) { alert('Load your A-roll first.'); return; }
   if (!E.broll.length) return;
   const b = E.broll[E.trimClipIdx];
-  const timePos = document.getElementById('aroll-preview').currentTime || 0;
   const dur = b.outPoint - b.inPoint;
+  let timePos = document.getElementById('aroll-preview').currentTime || 0;
 
-  // Check for overlap with existing clips
-  const overlaps = E.clips.some(c => {
-    const cd = c.outPoint - c.inPoint;
-    return timePos < c.trackStart + cd && timePos + dur > c.trackStart;
-  });
-  if (overlaps) {
-    alert('There is already a clip at this position. Move the playhead to an empty spot and try again.');
-    return;
+  // If the proposed position overlaps any clip, snap forward to the end of that clip.
+  // Loop until we find a free spot (handles multiple consecutive clips).
+  let moved = true;
+  while (moved) {
+    moved = false;
+    for (const c of E.clips) {
+      const cEnd = c.trackStart + (c.outPoint - c.inPoint);
+      if (timePos < cEnd && timePos + dur > c.trackStart) {
+        timePos = cEnd;
+        moved = true;
+      }
+    }
   }
 
   E.clips.push({
@@ -885,7 +889,7 @@ function renderTrimCard() {
         <button class="btn btn-ghost btn-sm" onclick="trimNext()" ${E.trimClipIdx === E.broll.length - 1 ? 'disabled' : ''}>Next →</button>
       </div>
       <div class="trim-preview-wrap">
-        <video id="trim-preview" src="${b.url}" muted playsinline preload="metadata"
+        <video id="trim-preview" src="${b.url}" muted playsinline preload="auto"
                style="cursor:pointer" onclick="this.paused?this.play():this.pause()"></video>
       </div>
       <div class="trim-slider-row">
@@ -907,9 +911,14 @@ function renderTrimCard() {
               style="width:100%;margin-top:10px;font-weight:700">📍 Place at indicator</button>
     </div>`;
 
-  // Seek the preview to inPoint after metadata loads
+  // Seek to inPoint once enough data is available to actually show a frame.
   const vid = document.getElementById('trim-preview');
-  vid.addEventListener('loadedmetadata', () => { vid.currentTime = inPt; }, { once: true });
+  const seekToIn = () => { if (inPt > 0) vid.currentTime = inPt; };
+  if (vid.readyState >= 2) {
+    seekToIn();
+  } else {
+    vid.addEventListener('loadeddata', seekToIn, { once: true });
+  }
 }
 
 window.trimPrev = function() {
@@ -975,8 +984,8 @@ window.startExport = async () => {
   setStatus('Loading FFmpeg (first time: ~40MB download)…');
 
   try {
-    const { FFmpeg } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/esm/index.js');
-    const { fetchFile, toBlobURL } = await import('https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js');
+    const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/esm/index.js');
+    const { fetchFile, toBlobURL } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js');
 
     const ffmpeg = new FFmpeg();
     ffmpeg.on('progress', ({ progress }) => {
@@ -989,7 +998,7 @@ window.startExport = async () => {
     setStatus('Loading FFmpeg core (~30MB, one-time download)…');
     // Use single-threaded core — works without SharedArrayBuffer / COOP headers,
     // more reliable across browsers and deployment environments.
-    const base = 'https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/esm';
+    const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.6/dist/esm';
     await ffmpeg.load({
       coreURL: await toBlobURL(`${base}/ffmpeg-core.js`,   'text/javascript'),
       wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -1026,11 +1035,11 @@ window.startExport = async () => {
       const bLabel = `[bt${i}]`;
       const outLabel = isLast ? '[vout]' : `[ov${i}]`;
 
-      // Trim b-roll, reset timestamps, scale to a-roll dimensions.
-      // Simple scale (no pad expressions) avoids WASM filter hang.
+      // Trim b-roll, reset timestamps, scale to a-roll dimensions, force yuv420p
+      // so the overlay filter always receives a compatible pixel format.
       parts.push(
         `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},` +
-        `setpts=PTS-STARTPTS,scale=${W}:${H}${bLabel}`
+        `setpts=PTS-STARTPTS,scale=${W}:${H},format=yuv420p${bLabel}`
       );
       // Overlay onto growing chain, enable only during clip's timeline window
       parts.push(
@@ -1040,6 +1049,7 @@ window.startExport = async () => {
     });
 
     setStatus('Compositing video…');
+    console.log('[export] filter_complex:', parts.join(';'));
 
     const args = [
       ...inputs,
@@ -1071,9 +1081,9 @@ window.startExport = async () => {
     setTimeout(() => setProgress(0), 2000);
 
   } catch (err) {
-    console.error(err);
-    setStatus('Export failed: ' + err.message +
-      '. Try Chrome or Firefox, and check that your files are H.264 MP4.');
+    console.error('[export]', err);
+    const msg = err?.message || String(err);
+    setStatus(`Export failed: ${msg} — check the browser console (F12) for details.`);
     setProgress(0);
   } finally {
     btn.disabled = false;
