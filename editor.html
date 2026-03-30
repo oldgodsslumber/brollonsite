@@ -475,20 +475,33 @@ async function generateThumb(url) {
     const c = document.createElement('canvas');
     c.width = 160; c.height = 90;
     v.muted = true; v.playsInline = true; v.preload = 'metadata';
-    v.onloadeddata = () => { v.currentTime = Math.min(1, v.duration * 0.1); };
-    v.onseeked = () => {
-      c.getContext('2d').drawImage(v, 0, 0, 160, 90);
+    let settled = false;
+    const capture = () => {
+      if (settled) return;
+      settled = true;
+      try { c.getContext('2d').drawImage(v, 0, 0, 160, 90); } catch {}
       v.src = '';
       resolve(c.toDataURL('image/jpeg', 0.7));
     };
-    v.onerror = () => resolve(null);
+    v.onloadeddata = () => {
+      const t = Math.min(1, (v.duration || 0) * 0.1);
+      if (t > 0.05) { v.currentTime = t; } else { capture(); }
+    };
+    v.onseeked = capture;
+    v.onerror = () => { settled = true; resolve(null); };
+    setTimeout(() => { if (!settled) { capture(); } }, 3000);
     v.src = url;
   });
 }
 
 // ── UPLOAD ───────────────────────────────────────────────
+const isVideo = f => f && (f.type.startsWith('video/') || /\.(mp4|mov|m4v|mkv|avi|webm|3gp|mts|m2ts)$/i.test(f.name));
+
 window.loadAroll = async file => {
-  if (!file || !file.type.startsWith('video/')) return;
+  if (!isVideo(file)) {
+    alert('Please select a video file (MP4, MOV, MKV, etc.).');
+    return;
+  }
   if (E.aroll) URL.revokeObjectURL(E.aroll.url);
   const url = URL.createObjectURL(file);
   const duration = await getVideoDuration(url);
@@ -507,7 +520,8 @@ window.loadAroll = async file => {
 };
 
 window.loadBroll = async files => {
-  const list = Array.from(files).filter(f => f.type.startsWith('video/'));
+  const list = Array.from(files).filter(isVideo);
+  if (!list.length) { alert('No recognised video files selected. Try MP4, MOV, or MKV.'); return; }
   if (E.broll.length + list.length > 15) {
     alert(`Maximum 15 b-roll clips. You already have ${E.broll.length}.`);
     return;
