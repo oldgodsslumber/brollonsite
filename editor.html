@@ -95,17 +95,23 @@
     .thumb-item {
       flex-shrink: 0; width: 80px; cursor: pointer;
       border-radius: 6px; overflow: hidden; border: 2px solid transparent;
-      transition: border-color .15s; background: var(--surf2);
+      transition: border-color .15s; background: #000;
     }
     .thumb-item.selected { border-color: var(--accent); }
-    .thumb-item canvas, .thumb-item img { width: 80px; height: 54px; display: block; object-fit: cover; }
+    .thumb-item-img-wrap {
+      width: 80px; height: 60px; background: #000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .thumb-item-img-wrap img {
+      max-width: 80px; max-height: 60px; width: auto; height: auto; display: block;
+    }
     .thumb-item-footer {
       padding: 2px 4px; font-size: 9px; color: var(--muted);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       display: flex; justify-content: space-between;
     }
     .thumb-placeholder {
-      width: 80px; height: 54px; background: var(--surf2);
+      width: 80px; height: 60px; background: var(--surf2);
       display: flex; align-items: center; justify-content: center;
       font-size: 20px;
     }
@@ -495,8 +501,6 @@ function getVideoMeta(url) {
 async function generateThumb(url) {
   return new Promise(resolve => {
     const v = document.createElement('video');
-    const c = document.createElement('canvas');
-    c.width = 160; c.height = 90;
     v.muted = true; v.playsInline = true; v.preload = 'auto';
     // Must be in the DOM for Chrome to decode frames for drawImage
     Object.assign(v.style, { visibility:'hidden', position:'fixed', width:'1px', height:'1px', top:'-9999px', left:'-9999px' });
@@ -506,7 +510,16 @@ async function generateThumb(url) {
     const capture = () => {
       if (settled) return;
       settled = true;
-      try { c.getContext('2d').drawImage(v, 0, 0, 160, 90); } catch {}
+      // Size the canvas to match the video's actual aspect ratio (max 160px on long side)
+      const vw = v.videoWidth  || 160;
+      const vh = v.videoHeight || 90;
+      const MAX = 160;
+      const scale = Math.min(MAX / vw, MAX / vh);
+      const cw = Math.round(vw * scale);
+      const ch = Math.round(vh * scale);
+      const c = document.createElement('canvas');
+      c.width = cw; c.height = ch;
+      try { c.getContext('2d').drawImage(v, 0, 0, cw, ch); } catch {}
       v.src = '';
       if (v.parentNode) v.parentNode.removeChild(v);
       resolve(c.toDataURL('image/jpeg', 0.7));
@@ -575,7 +588,7 @@ function renderThumbStrip() {
     <div class="thumb-item${E.selectedBroll === i ? ' selected' : ''}"
          onclick="selectBroll(${i})" title="${b.name}">
       ${b.thumb
-        ? `<img src="${b.thumb}" alt="">`
+        ? `<div class="thumb-item-img-wrap"><img src="${b.thumb}" alt=""></div>`
         : `<div class="thumb-placeholder">🎬</div>`}
       <div class="thumb-item-footer">
         <span style="overflow:hidden;text-overflow:ellipsis">${b.name.replace(/\.[^.]+$/, '')}</span>
