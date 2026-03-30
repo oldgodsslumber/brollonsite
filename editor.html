@@ -437,6 +437,13 @@
   ─────────────────────────────────────────────── -->
   <div class="card">
     <div class="card-title">4 · Export</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-sm" id="save-btn" onclick="saveProject()" disabled style="flex:1">💾 Save Project</button>
+      <label class="btn btn-sm" style="flex:1;cursor:pointer;text-align:center">
+        📂 Load Project
+        <input type="file" accept=".json" style="display:none" onchange="loadProject(this.files[0]);this.value=''">
+      </label>
+    </div>
     <div class="info-banner" style="margin-bottom:12px">
       Export encodes your edit frame-by-frame into an MP4 — takes a minute but produces a clean, playable file. Works on Chrome, Firefox, and Safari.
     </div>
@@ -578,6 +585,7 @@ window.loadBroll = async files => {
     `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
   renderThumbStrip();
   renderTrimCard();
+  updateExportBtn();
 };
 
 // ── THUMBNAIL STRIP ──────────────────────────────────────
@@ -968,6 +976,10 @@ function _updateTrimSummary() {
 
 // ── EXPORT ───────────────────────────────────────────────
 function updateExportBtn() {
+  const hasSomething = E.aroll || E.broll.length > 0 || E.clips.length > 0;
+  const saveBtn = document.getElementById('save-btn');
+  if (saveBtn) saveBtn.disabled = !hasSomething;
+
   const ok = E.aroll && E.clips.length > 0;
   document.getElementById('export-btn').disabled = !ok;
   if (!ok) {
@@ -987,6 +999,58 @@ function setProgress(pct) {
   track.style.display = pct > 0 ? '' : 'none';
   fill.style.width = pct + '%';
 }
+
+// ── PROJECT SAVE / LOAD ───────────────────────────────────
+window.saveProject = () => {
+  const project = {
+    version: 1,
+    aroll: E.aroll ? { name: E.aroll.name, duration: E.aroll.duration } : null,
+    broll: E.broll.map(b => ({ name: b.name, duration: b.duration, inPoint: b.inPoint, outPoint: b.outPoint })),
+    clips: E.clips.map(c => ({ brollIdx: c.brollIdx, trackStart: c.trackStart, inPoint: c.inPoint, outPoint: c.outPoint })),
+  };
+  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: 'broll-project.json' });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+};
+
+window.loadProject = async file => {
+  try {
+    const proj = JSON.parse(await file.text());
+    if (proj.version !== 1) throw new Error('Unknown project format.');
+
+    // Restore broll trim points by matching filename
+    for (const saved of proj.broll) {
+      const b = E.broll.find(x => x.name === saved.name);
+      if (b) { b.inPoint = saved.inPoint; b.outPoint = saved.outPoint; }
+    }
+
+    // Rebuild clips remapping brollIdx to current loaded broll order
+    const nameToIdx = {};
+    E.broll.forEach((b, i) => { nameToIdx[b.name] = i; });
+    E.clips = proj.clips.flatMap(c => {
+      const name = proj.broll[c.brollIdx]?.name;
+      const idx  = nameToIdx[name];
+      return idx !== undefined
+        ? [{ brollIdx: idx, trackStart: c.trackStart, inPoint: c.inPoint, outPoint: c.outPoint }]
+        : [];
+    });
+    E.selected = null;
+    hideClipPanel();
+    renderClips();
+    renderThumbStrip();
+    renderTrimCard();
+    updateExportBtn();
+
+    const missing = proj.broll.filter(b => nameToIdx[b.name] === undefined).map(b => b.name);
+    alert(missing.length
+      ? `Loaded ${E.clips.length} clip${E.clips.length !== 1 ? 's' : ''}.\n\nNot yet uploaded:\n• ${missing.join('\n• ')}`
+      : `Loaded ${E.clips.length} clip${E.clips.length !== 1 ? 's' : ''}.`);
+  } catch (e) {
+    alert('Could not load project: ' + (e.message || e));
+  }
+};
 
 window.startExport = async () => {
   if (!E.aroll || E.clips.length === 0) return;
@@ -1066,7 +1130,7 @@ window.startExport = async () => {
 
     // ── Offline audio render ──────────────────────────────
     setStatus('Decoding audio…');
-    const rawAudio = await fetch(E.aroll.url).then(r => r.arrayBuffer());
+    const rawAudio = await E.aroll.file.arrayBuffer();
     const offCtx = new OfflineAudioContext(N_CH, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE);
     const audioBuf = await offCtx.decodeAudioData(rawAudio);
     const audioSrc = offCtx.createBufferSource();
@@ -1098,8 +1162,12 @@ window.startExport = async () => {
     let curBrollUrl = null;
 
     const seekTo = (vid, t) => new Promise(resolve => {
+      if (Math.abs(vid.currentTime - t) < 0.001 && !vid.seeking) { resolve(); return; }
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      vid.addEventListener('seeked', finish, { once: true });
       vid.currentTime = t;
-      vid.addEventListener('seeked', resolve, { once: true });
+      setTimeout(finish, 4000); // safety: unblock if seeked never fires
     });
 
     for (let i = 0; i < totalFrames; i++) {
