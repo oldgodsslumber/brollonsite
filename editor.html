@@ -986,10 +986,12 @@ window.startExport = async () => {
     });
     ffmpeg.on('log', ({ message }) => console.log('[ffmpeg]', message));
 
-    setStatus('Loading FFmpeg core…');
-    const base = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    setStatus('Loading FFmpeg core (~30MB, one-time download)…');
+    // Use single-threaded core — works without SharedArrayBuffer / COOP headers,
+    // more reliable across browsers and deployment environments.
+    const base = 'https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/esm';
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
+      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`,   'text/javascript'),
       wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
     });
 
@@ -1008,24 +1010,27 @@ window.startExport = async () => {
     const inputs = ['-i', 'aroll.mp4'];
     usedIdxs.forEach(idx => inputs.push('-i', `br${idx}.mp4`));
 
-    // Build filter_complex: trim each broll clip then overlay in sequence
+    // Build filter_complex: trim each broll clip then overlay in sequence.
+    // Sort clips chronologically so the chain is built left-to-right.
+    const sortedClips = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
     const parts = [];
     let prevOut = '0:v';
+    const W = E.aroll.width, H = E.aroll.height;
 
-    E.clips.forEach((clip, i) => {
+    sortedClips.forEach((clip, i) => {
       const inputIdx = usedIdxs.indexOf(clip.brollIdx) + 1; // +1 because 0=aroll
       const dur = clip.outPoint - clip.inPoint;
       const ts  = clip.trackStart;
       const te  = ts + dur;
-      const isLast = i === E.clips.length - 1;
+      const isLast = i === sortedClips.length - 1;
       const bLabel = `[bt${i}]`;
       const outLabel = isLast ? '[vout]' : `[ov${i}]`;
 
-      // Trim b-roll, reset timestamps, scale to match a-roll canvas
-      const W = E.aroll.width, H = E.aroll.height;
+      // Trim b-roll, reset timestamps, scale to a-roll dimensions.
+      // Simple scale (no pad expressions) avoids WASM filter hang.
       parts.push(
-        `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},setpts=PTS-STARTPTS,` +
-        `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2${bLabel}`
+        `[${inputIdx}:v]trim=start=${clip.inPoint.toFixed(3)}:end=${clip.outPoint.toFixed(3)},` +
+        `setpts=PTS-STARTPTS,scale=${W}:${H}${bLabel}`
       );
       // Overlay onto growing chain, enable only during clip's timeline window
       parts.push(
@@ -1044,6 +1049,7 @@ window.startExport = async () => {
       '-c:v', 'libx264',
       '-preset', 'fast',
       '-crf', '23',
+      '-pix_fmt', 'yuv420p',
       '-c:a', 'aac',
       '-b:a', '128k',
       '-movflags', '+faststart',
