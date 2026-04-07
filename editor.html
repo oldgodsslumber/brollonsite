@@ -469,6 +469,7 @@ const E = {
   trimClipIdx:  0,     // index into E.broll for trim card
   playing:      false,
   pxPerSec:     14,    // timeline zoom
+  brollLoading: false, // true while FPS detection is running
 };
 
 // ── DRAG-OVER / DROP ─────────────────────────────────────
@@ -555,7 +556,7 @@ function detectFps(url) {
         if (d > 0.001 && d < 0.5) deltas.push(d);
       }
       prev = meta.mediaTime;
-      if (deltas.length < 10) {
+      if (deltas.length < 5) {
         v.requestVideoFrameCallback(cb);
       } else {
         const avg = deltas.reduce((a, b) => a + b) / deltas.length;
@@ -563,7 +564,7 @@ function detectFps(url) {
       }
     };
 
-    setTimeout(() => finish(30), 6000); // safety net
+    setTimeout(() => finish(30), 3000); // safety net
     v.src = url;
     v.requestVideoFrameCallback(cb);
     v.play().catch(() => finish(30));
@@ -651,10 +652,11 @@ window.loadBroll = async files => {
     alert(`Maximum 15 b-roll clips. You already have ${E.broll.length}.`);
     return;
   }
+  E.brollLoading = true;
   const infoEl = document.getElementById('broll-info');
-  const startIdx = E.broll.length; // remember where new clips start
+  const startIdx = E.broll.length;
 
-  // Pass 1: metadata + thumbnails (fast, gives visual feedback)
+  // Pass 1: metadata + thumbnails (gives visual feedback immediately)
   for (let i = 0; i < list.length; i++) {
     infoEl.textContent = `Loading clip ${i + 1} of ${list.length}…`;
     const file = list[i];
@@ -662,6 +664,8 @@ window.loadBroll = async files => {
     const { duration } = await getVideoMeta(url);
     const thumb = await generateThumb(url);
     E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration, nativeFps: null, speedRatio: 1 });
+    // Yield between clips so the browser can release video decoder resources
+    await new Promise(r => setTimeout(r, 80));
   }
 
   const zone = document.getElementById('broll-zone');
@@ -670,15 +674,17 @@ window.loadBroll = async files => {
   renderTrimCard();
   updateExportBtn();
 
-  // Pass 2: detect FPS per clip (can take a moment per clip)
-  infoEl.textContent = `Detecting frame rates…`;
+  // Pass 2: detect FPS per clip
   for (let i = startIdx; i < E.broll.length; i++) {
+    infoEl.textContent = `Detecting frame rate ${i - startIdx + 1} of ${list.length}…`;
     const b = E.broll[i];
     b.nativeFps = await detectFps(b.url);
     b.speedRatio = E.aroll?.fps ? E.aroll.fps / b.nativeFps : 1;
   }
-  renderClips(); // re-render with correct interpreted durations
 
+  E.brollLoading = false;
+  renderClips();
+  renderTrimCard(); // re-enable "Place at indicator" button
   infoEl.textContent =
     `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
   updateExportBtn();
@@ -959,6 +965,7 @@ function updatePlayheadPos(t) {
 window.placeAtIndicator = function() {
   if (!E.aroll) { alert('Load your A-roll first.'); return; }
   if (!E.broll.length) return;
+  if (E.brollLoading) { alert('Still detecting frame rates — please wait a moment.'); return; }
   const b = E.broll[E.trimClipIdx];
   const dur = (b.outPoint - b.inPoint) / (b.speedRatio || 1); // interpreted duration
   let timePos = document.getElementById('aroll-preview').currentTime || 0;
@@ -1032,7 +1039,8 @@ function renderTrimCard() {
         Trimmed: ${inPt.toFixed(1)}s – ${outPt.toFixed(1)}s &nbsp;(${trimmed}s used)
       </div>
       <button class="btn btn-ghost" onclick="placeAtIndicator()"
-              style="width:100%;margin-top:10px;font-weight:700">📍 Place at indicator</button>
+              style="width:100%;margin-top:10px;font-weight:700"
+              ${E.brollLoading ? 'disabled' : ''}>📍 ${E.brollLoading ? 'Detecting frame rates…' : 'Place at indicator'}</button>
     </div>`;
 
   // Seek to inPoint once enough data is available to actually show a frame.
