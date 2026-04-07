@@ -490,6 +490,12 @@ function fmtDur(s) {
   return `${m}:${sec.toString().padStart(2,'0')}`;
 }
 
+// Interpreted clip duration on the timeline (native dur ÷ speedRatio)
+function clipTimelineDur(c) {
+  const b = E.broll[c.brollIdx];
+  return (c.outPoint - c.inPoint) / (b?.speedRatio || 1);
+}
+
 function fmtFps(fps) {
   if (Math.abs(fps - 23.976) < 0.02) return '23.98';
   if (Math.abs(fps - 29.97)  < 0.02) return '29.97';
@@ -630,6 +636,11 @@ window.loadAroll = async file => {
     if (!E.aroll || E.aroll.url !== url) return; // stale if user re-loaded
     E.aroll.fps = fps;
     infoEl.textContent = `✓ ${file.name} · ${fmtDur(meta.duration)} · ${meta.width}×${meta.height} · ${fmtFps(fps)} fps`;
+    // Recalculate all B-roll speed ratios when A-roll FPS is known
+    for (const b of E.broll) {
+      if (b.nativeFps) b.speedRatio = fps / b.nativeFps;
+    }
+    renderClips();
   });
 };
 
@@ -643,8 +654,10 @@ window.loadBroll = async files => {
   for (const file of list) {
     const url = URL.createObjectURL(file);
     const { duration } = await getVideoMeta(url);
+    const nativeFps = await detectFps(url);
+    const speedRatio = E.aroll?.fps ? E.aroll.fps / nativeFps : 1;
     const thumb = await generateThumb(url);
-    E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration });
+    E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration, nativeFps, speedRatio });
   }
   const zone = document.getElementById('broll-zone');
   zone.classList.add('loaded');
@@ -729,7 +742,7 @@ function renderClips() {
 
   E.clips.forEach((clip, i) => {
     const b = E.broll[clip.brollIdx];
-    const dur = clip.outPoint - clip.inPoint;
+    const dur = clipTimelineDur(clip);
     const w = Math.max(16, dur * E.pxPerSec);
     const x = clip.trackStart * E.pxPerSec;
 
@@ -781,7 +794,7 @@ document.addEventListener('pointermove', e => {
   }
   const dt = dx / E.pxPerSec;
   const dragged = E.clips[_drag.idx];
-  const dragDur = dragged.outPoint - dragged.inPoint;
+  const dragDur = clipTimelineDur(dragged);
   let newStart = Math.max(0, Math.round((_drag.origStart + dt) * 10) / 10);
 
   // Clamp position to prevent overlapping other clips.
@@ -789,7 +802,7 @@ document.addEventListener('pointermove', e => {
   let lo = 0, hi = E.aroll ? E.aroll.duration - dragDur : 9999;
   E.clips.forEach((c, i) => {
     if (i === _drag.idx) return;
-    const cDur = c.outPoint - c.inPoint;
+    const cDur = clipTimelineDur(c);
     if (c.trackStart + cDur <= _drag.origStart) {
       lo = Math.max(lo, c.trackStart + cDur); // this clip is to our left
     } else {
@@ -871,19 +884,20 @@ function syncOverlay(t) {
   const EPSILON = 0.1;
   const sorted = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
   const match = sorted.find(c => {
-    const dur = c.outPoint - c.inPoint;
-    return t >= c.trackStart - EPSILON && t < c.trackStart + dur + EPSILON;
+    return t >= c.trackStart - EPSILON && t < c.trackStart + clipTimelineDur(c) + EPSILON;
   });
   if (match) {
     const bclip = E.broll[match.brollIdx];
-    const rawTime = match.inPoint + (t - match.trackStart);
-    // Clamp bTime to valid range
+    const ratio = bclip?.speedRatio || 1;
+    // Map timeline time → native B-roll time (adjusted by FPS ratio)
+    const rawTime = match.inPoint + (t - match.trackStart) * ratio;
     const bTime = Math.max(match.inPoint, Math.min(match.outPoint - 0.01, rawTime));
     if (bVid.dataset.src !== bclip.url) {
       bVid.dataset.src = bclip.url;
       bVid.src = bclip.url;
       bVid.load();
     }
+    bVid.playbackRate = ratio;
     if (Math.abs(bVid.currentTime - bTime) > 0.35) bVid.currentTime = bTime;
     if (E.playing && bVid.paused) bVid.play().catch(() => {});
     bVid.style.opacity = '1';
@@ -923,7 +937,7 @@ window.placeAtIndicator = function() {
   if (!E.aroll) { alert('Load your A-roll first.'); return; }
   if (!E.broll.length) return;
   const b = E.broll[E.trimClipIdx];
-  const dur = b.outPoint - b.inPoint;
+  const dur = (b.outPoint - b.inPoint) / (b.speedRatio || 1); // interpreted duration
   let timePos = document.getElementById('aroll-preview').currentTime || 0;
 
   // If the proposed position overlaps any clip, snap forward to the end of that clip.
@@ -932,7 +946,7 @@ window.placeAtIndicator = function() {
   while (moved) {
     moved = false;
     for (const c of E.clips) {
-      const cEnd = c.trackStart + (c.outPoint - c.inPoint);
+      const cEnd = c.trackStart + clipTimelineDur(c);
       if (timePos < cEnd && timePos + dur > c.trackStart) {
         timePos = cEnd;
         moved = true;
@@ -1072,7 +1086,7 @@ window.saveProject = () => {
   const project = {
     version: 1,
     aroll: E.aroll ? { name: E.aroll.name, duration: E.aroll.duration } : null,
-    broll: E.broll.map(b => ({ name: b.name, duration: b.duration, inPoint: b.inPoint, outPoint: b.outPoint })),
+    broll: E.broll.map(b => ({ name: b.name, duration: b.duration, inPoint: b.inPoint, outPoint: b.outPoint, nativeFps: b.nativeFps })),
     clips: E.clips.map(c => ({ brollIdx: c.brollIdx, trackStart: c.trackStart, inPoint: c.inPoint, outPoint: c.outPoint })),
   };
   const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
@@ -1090,7 +1104,13 @@ window.loadProject = async file => {
     // Restore broll trim points by matching filename
     for (const saved of proj.broll) {
       const b = E.broll.find(x => x.name === saved.name);
-      if (b) { b.inPoint = saved.inPoint; b.outPoint = saved.outPoint; }
+      if (b) {
+        b.inPoint = saved.inPoint; b.outPoint = saved.outPoint;
+        if (saved.nativeFps) {
+          b.nativeFps = saved.nativeFps;
+          b.speedRatio = E.aroll?.fps ? E.aroll.fps / saved.nativeFps : 1;
+        }
+      }
     }
 
     // Rebuild clips remapping brollIdx to current loaded broll order
@@ -1261,7 +1281,7 @@ window.startExport = async () => {
       try { ctx2d.drawImage(aVid, 0, 0, W, H); } catch {}
 
       // B-roll overlay
-      const clip = sortedClips.find(c => t >= c.trackStart && t < c.trackStart + (c.outPoint - c.inPoint));
+      const clip = sortedClips.find(c => t >= c.trackStart && t < c.trackStart + clipTimelineDur(c));
       if (clip) {
         const bc = E.broll[clip.brollIdx];
         if (curBrollUrl !== bc.url) {
@@ -1272,8 +1292,9 @@ window.startExport = async () => {
             bv.addEventListener('loadedmetadata', resolve, { once: true });
           });
         }
+        const ratio = bc?.speedRatio || 1;
         const bTime = Math.max(clip.inPoint,
-                       Math.min(clip.outPoint - 0.01, clip.inPoint + (t - clip.trackStart)));
+                       Math.min(clip.outPoint - 0.01, clip.inPoint + (t - clip.trackStart) * ratio));
         await seekTo(bv, bTime);
         try { if (bv.readyState >= 2) ctx2d.drawImage(bv, 0, 0, W, H); } catch {}
       }
