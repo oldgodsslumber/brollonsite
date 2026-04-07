@@ -1222,9 +1222,14 @@ window.startExport = async () => {
     if (!videoConfig) throw new Error(`No supported H.264 profile found (dimensions: ${W}×${H}). Try a different browser.`);
 
     // ── Find a supported AAC config ───────────────────────
+    // Probe the browser's native audio sample rate first (Safari ignores requested rates)
+    const _probeCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const NATIVE_RATE = _probeCtx.sampleRate;
+    await _probeCtx.close();
+
     const N_CH = 2;
     let audioConfig = null;
-    for (const sampleRate of [48000, 44100]) {
+    for (const sampleRate of [NATIVE_RATE, 48000, 44100]) {
       const cfg = { codec: 'mp4a.40.2', numberOfChannels: N_CH, sampleRate, bitrate: 128_000 };
       try {
         const { supported } = await AudioEncoder.isConfigSupported(cfg);
@@ -1261,34 +1266,59 @@ window.startExport = async () => {
     });
     audioEncoder.configure(audioConfig);
 
-    // ── Offline audio render ──────────────────────────────
-    setStatus('Decoding audio…');
-    const rawAudio = await E.aroll.file.arrayBuffer();
-    const offCtx = new OfflineAudioContext(N_CH, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE);
-    const audioBuf = await offCtx.decodeAudioData(rawAudio);
-    const audioSrc = offCtx.createBufferSource();
-    audioSrc.buffer = audioBuf;
-    audioSrc.connect(offCtx.destination);
-    audioSrc.start(0);
-    const rendered = await offCtx.startRendering();
+    // ── Real-time audio capture (runs in parallel with video) ──
+    setStatus('Starting audio capture…');
+    const audioVid = document.createElement('video');
+    audioVid.playsInline = true;
+    Object.assign(audioVid.style, { position:'fixed', top:'-9999px', left:'-9999px',
+                                     width:'1px', height:'1px', visibility:'hidden' });
+    document.body.appendChild(audioVid);
+    audioVid.src = E.aroll.url;
 
-    const ach0 = rendered.getChannelData(0);
-    const ach1 = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : ach0;
-    const ACHUNK = 4096;
+    await new Promise(resolve => {
+      if (audioVid.readyState >= 2) { resolve(); return; }
+      audioVid.addEventListener('loadeddata', resolve, { once: true });
+    });
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const captureSrc = audioCtx.createMediaElementSource(audioVid);
+    const captureProc = audioCtx.createScriptProcessor(4096, N_CH, N_CH);
+    captureSrc.connect(captureProc);
+    // Must connect to destination for ScriptProcessor to fire, but mute output
+    const muteGain = audioCtx.createGain();
+    muteGain.gain.value = 0;
+    captureProc.connect(muteGain);
+    muteGain.connect(audioCtx.destination);
+
     let audioTsUs = 0;
-    for (let off = 0; off < rendered.length; off += ACHUNK) {
-      if (audioEncErr) throw audioEncErr;
-      const count = Math.min(ACHUNK, rendered.length - off);
-      const buf = new Float32Array(count * 2);
-      buf.set(ach0.subarray(off, off + count), 0);
-      buf.set(ach1.subarray(off, off + count), count);
-      const af = new AudioData({ format:'f32-planar', sampleRate:SAMPLE_RATE,
-                                  numberOfFrames:count, numberOfChannels:N_CH,
-                                  timestamp:audioTsUs, data:buf });
-      audioTsUs += Math.round(count / SAMPLE_RATE * 1_000_000);
-      audioEncoder.encode(af);
-      af.close();
-    }
+    captureProc.onaudioprocess = e => {
+      const ch0 = e.inputBuffer.getChannelData(0);
+      const ch1 = N_CH > 1 ? e.inputBuffer.getChannelData(1) : ch0;
+      const count = ch0.length;
+      const buf = new Float32Array(count * N_CH);
+      buf.set(ch0, 0);
+      if (N_CH > 1) buf.set(ch1, count);
+      try {
+        const af = new AudioData({
+          format: 'f32-planar', sampleRate: audioCtx.sampleRate,
+          numberOfFrames: count, numberOfChannels: N_CH,
+          timestamp: audioTsUs, data: buf,
+        });
+        audioTsUs += Math.round(count / audioCtx.sampleRate * 1_000_000);
+        audioEncoder.encode(af);
+        af.close();
+      } catch {}
+    };
+
+    // Start audio playback — runs in background while we encode video frames
+    audioVid.currentTime = 0;
+    const audioCaptureDone = new Promise(resolve => {
+      audioVid.addEventListener('ended', () => setTimeout(resolve, 500), { once: true });
+      // Safety: resolve when video duration is exceeded
+      setTimeout(resolve, (duration + 5) * 1000);
+    });
+    audioVid.play().catch(() => {});
 
     // ── Frame-by-frame video encode ───────────────────────
     const sortedClips = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
@@ -1345,6 +1375,16 @@ window.startExport = async () => {
 
     if (videoEncErr) throw videoEncErr;
     if (audioEncErr) throw audioEncErr;
+
+    // ── Wait for audio capture to finish ──────────────────
+    setStatus('Finishing audio capture…');
+    await audioCaptureDone;
+    captureProc.disconnect();
+    captureSrc.disconnect();
+    muteGain.disconnect();
+    audioVid.pause(); audioVid.src = ''; audioVid.load();
+    audioVid.remove();
+    audioCtx.close().catch(() => {});
 
     // ── Flush + finalize + save ───────────────────────────
     setStatus('Finalizing…');
