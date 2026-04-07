@@ -517,9 +517,9 @@ async function readFpsFromFile(file) {
   // We need: moov → trak → mdia → mdhd (timescale) + minf → stbl → stts (sample_delta)
   // fps = timescale / sample_delta
   try {
-    // Read enough for the moov atom. For fast-start files it's at the beginning.
-    // For non-fast-start, moov is at the end — try both.
-    const CHUNK = Math.min(file.size, 4 * 1024 * 1024); // 4MB
+    // Read enough for the moov atom. For fast-start (moov at start) we only
+    // need a small header chunk. For non-fast-start, moov is at the end.
+    const CHUNK = Math.min(file.size, 512 * 1024); // 512KB — moov headers are small
     let buf = await file.slice(0, CHUNK).arrayBuffer();
     let dv = new DataView(buf);
 
@@ -527,6 +527,7 @@ async function readFpsFromFile(file) {
     let moovOff = findAtom(dv, 0, buf.byteLength, 'moov');
     if (moovOff === -1 && file.size > CHUNK) {
       // moov at end of file
+      buf = null; // free the head buffer
       const tailBuf = await file.slice(Math.max(0, file.size - CHUNK)).arrayBuffer();
       dv = new DataView(tailBuf);
       buf = tailBuf;
@@ -616,65 +617,71 @@ function extractFpsFromMdia(dv, mdiaOff, mdiaEnd) {
 }
 
 // ── PROBE CLIP (metadata + thumbnail + FPS from header) ────
-function probeClip(url, file) {
-  return new Promise(async (resolve) => {
-    // Read FPS from binary header first (instant, no video element)
-    let fps = file ? await readFpsFromFile(file) : null;
+async function probeClip(url, file) {
+  // Step 1: read FPS from binary header (instant, no video element)
+  let fps = null;
+  try { if (file) fps = await readFpsFromFile(file); } catch {}
 
-    const v = document.createElement('video');
-    v.muted = true; v.playsInline = true; v.preload = 'auto';
-    Object.assign(v.style, { position:'fixed', top:'0', left:'0',
-                              width:'10px', height:'10px', opacity:'0',
-                              pointerEvents:'none', zIndex:'-1' });
-    document.body.appendChild(v);
+  // Step 2: video element for metadata + thumbnail
+  const result = { duration: 0, width: 1920, height: 1080, thumb: null, fps: fps || 30 };
 
-    let done = false;
-    const result = { duration: 0, width: 1920, height: 1080, thumb: null, fps: fps || 30 };
+  try {
+    await new Promise((resolve, reject) => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      Object.assign(v.style, { position:'fixed', top:'0', left:'0',
+                                width:'10px', height:'10px', opacity:'0',
+                                pointerEvents:'none', zIndex:'-1' });
+      document.body.appendChild(v);
 
-    const cleanup = () => {
-      v.pause(); v.src = ''; v.load();
-      if (v.parentNode) v.parentNode.removeChild(v);
-    };
+      let done = false;
+      const cleanup = () => {
+        v.pause(); v.src = ''; v.load();
+        if (v.parentNode) v.parentNode.removeChild(v);
+      };
+      const finish = () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve();
+      };
 
-    const finish = () => {
-      if (done) return;
-      done = true;
-      cleanup();
-      resolve(result);
-    };
+      const captureThumb = () => {
+        const vw = v.videoWidth  || 160;
+        const vh = v.videoHeight || 90;
+        const MAX = 160;
+        const scale = Math.min(MAX / vw, MAX / vh);
+        const cw = Math.round(vw * scale);
+        const ch = Math.round(vh * scale);
+        const c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        try { c.getContext('2d').drawImage(v, 0, 0, cw, ch); } catch {}
+        result.thumb = c.toDataURL('image/jpeg', 0.7);
+        finish();
+      };
 
-    // Capture thumbnail then finish
-    const captureThumb = () => {
-      const vw = v.videoWidth  || 160;
-      const vh = v.videoHeight || 90;
-      const MAX = 160;
-      const scale = Math.min(MAX / vw, MAX / vh);
-      const cw = Math.round(vw * scale);
-      const ch = Math.round(vh * scale);
-      const c = document.createElement('canvas');
-      c.width = cw; c.height = ch;
-      try { c.getContext('2d').drawImage(v, 0, 0, cw, ch); } catch {}
-      result.thumb = c.toDataURL('image/jpeg', 0.7);
-      finish();
-    };
+      v.onloadeddata = () => {
+        result.duration = v.duration || 0;
+        result.width    = v.videoWidth  || 1920;
+        result.height   = v.videoHeight || 1080;
+        const t = Math.min(1, result.duration * 0.1);
+        if (t > 0.05) {
+          v.onseeked = captureThumb;
+          v.currentTime = t;
+        } else {
+          captureThumb();
+        }
+      };
 
-    v.onloadeddata = () => {
-      result.duration = v.duration || 0;
-      result.width    = v.videoWidth  || 1920;
-      result.height   = v.videoHeight || 1080;
-      const t = Math.min(1, result.duration * 0.1);
-      if (t > 0.05) {
-        v.onseeked = captureThumb;
-        v.currentTime = t;
-      } else {
-        captureThumb();
-      }
-    };
+      v.onerror = () => { done = true; cleanup(); resolve(); };
+      setTimeout(finish, 6000);
+      v.src = url;
+    });
+  } catch (e) {
+    console.warn('[probeClip] thumbnail failed:', e);
+  }
 
-    v.onerror = () => { done = true; cleanup(); resolve(result); };
-    setTimeout(finish, 6000);
-    v.src = url;
-  });
+  return result;
 }
 
 // ── UPLOAD ───────────────────────────────────────────────
