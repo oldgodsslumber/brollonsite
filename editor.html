@@ -1084,7 +1084,8 @@ function renderTrimCard() {
   const dur = b.duration || 0;
   const inPt = b.inPoint || 0;
   const outPt = (b.outPoint != null ? b.outPoint : dur);
-  const trimmed = Math.max(0, outPt - inPt).toFixed(1);
+  const nativeTrimmed = Math.max(0, outPt - inPt);
+  const timelineTrimmed = (nativeTrimmed / (b.speedRatio || 1)).toFixed(1);
 
   body.innerHTML = `
     <div class="trim-card-inner">
@@ -1110,7 +1111,7 @@ function renderTrimCard() {
                oninput="onTrimOut(parseFloat(this.value))">
       </div>
       <div class="trim-summary" id="trim-summary">
-        Trimmed: ${inPt.toFixed(1)}s – ${outPt.toFixed(1)}s &nbsp;(${trimmed}s used)
+        Trimmed: ${inPt.toFixed(1)}s – ${outPt.toFixed(1)}s &nbsp;(${timelineTrimmed}s on timeline)
       </div>
       <button class="btn btn-ghost" onclick="placeAtIndicator()"
               style="width:100%;margin-top:10px;font-weight:700"
@@ -1155,9 +1156,10 @@ window.onTrimOut = function(val) {
 };
 function _updateTrimSummary() {
   const b = E.broll[E.trimClipIdx];
-  const trimmed = Math.max(0, b.outPoint - b.inPoint).toFixed(1);
+  const nativeDur = Math.max(0, b.outPoint - b.inPoint);
+  const timelineDur = (nativeDur / (b.speedRatio || 1)).toFixed(1);
   const el = document.getElementById('trim-summary');
-  if (el) el.innerHTML = `Trimmed: ${b.inPoint.toFixed(1)}s – ${b.outPoint.toFixed(1)}s &nbsp;(${trimmed}s used)`;
+  if (el) el.innerHTML = `Trimmed: ${b.inPoint.toFixed(1)}s – ${b.outPoint.toFixed(1)}s &nbsp;(${timelineDur}s on timeline)`;
 }
 
 // ── EXPORT ───────────────────────────────────────────────
