@@ -544,7 +544,7 @@ function detectFps(url) {
     const finish = fps => {
       if (done) return;
       done = true;
-      v.pause(); v.src = '';
+      v.pause(); v.src = ''; v.load(); // release media session
       if (v.parentNode) v.parentNode.removeChild(v);
       resolve(fps);
     };
@@ -651,20 +651,36 @@ window.loadBroll = async files => {
     alert(`Maximum 15 b-roll clips. You already have ${E.broll.length}.`);
     return;
   }
-  for (const file of list) {
+  const infoEl = document.getElementById('broll-info');
+  const startIdx = E.broll.length; // remember where new clips start
+
+  // Pass 1: metadata + thumbnails (fast, gives visual feedback)
+  for (let i = 0; i < list.length; i++) {
+    infoEl.textContent = `Loading clip ${i + 1} of ${list.length}…`;
+    const file = list[i];
     const url = URL.createObjectURL(file);
     const { duration } = await getVideoMeta(url);
-    const nativeFps = await detectFps(url);
-    const speedRatio = E.aroll?.fps ? E.aroll.fps / nativeFps : 1;
     const thumb = await generateThumb(url);
-    E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration, nativeFps, speedRatio });
+    E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration, nativeFps: null, speedRatio: 1 });
   }
+
   const zone = document.getElementById('broll-zone');
   zone.classList.add('loaded');
-  document.getElementById('broll-info').textContent =
-    `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
   renderThumbStrip();
   renderTrimCard();
+  updateExportBtn();
+
+  // Pass 2: detect FPS per clip (can take a moment per clip)
+  infoEl.textContent = `Detecting frame rates…`;
+  for (let i = startIdx; i < E.broll.length; i++) {
+    const b = E.broll[i];
+    b.nativeFps = await detectFps(b.url);
+    b.speedRatio = E.aroll?.fps ? E.aroll.fps / b.nativeFps : 1;
+  }
+  renderClips(); // re-render with correct interpreted durations
+
+  infoEl.textContent =
+    `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
   updateExportBtn();
 };
 
@@ -883,9 +899,16 @@ function syncOverlay(t) {
   // don't cause a brief flash of A-roll during the transition.
   const EPSILON = 0.1;
   const sorted = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
-  const match = sorted.find(c => {
-    return t >= c.trackStart - EPSILON && t < c.trackStart + clipTimelineDur(c) + EPSILON;
-  });
+  // When two clips overlap via EPSILON (adjacent clips), prefer the one
+  // whose actual range contains t; if neither does, prefer the later clip.
+  let match = null;
+  for (const c of sorted) {
+    const end = c.trackStart + clipTimelineDur(c);
+    if (t >= c.trackStart - EPSILON && t < end + EPSILON) {
+      if (t >= c.trackStart && t < end) { match = c; break; } // exact hit
+      match = c; // EPSILON hit — keep scanning, latest wins
+    }
+  }
   if (match) {
     const bclip = E.broll[match.brollIdx];
     const ratio = bclip?.speedRatio || 1;
@@ -956,7 +979,7 @@ window.placeAtIndicator = function() {
 
   E.clips.push({
     brollIdx:   E.trimClipIdx,
-    trackStart: Math.round(timePos * 10) / 10,
+    trackStart: Math.round(timePos * 1000) / 1000, // ms precision for tight adjacency
     inPoint:    b.inPoint,
     outPoint:   b.outPoint,
   });
