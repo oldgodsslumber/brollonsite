@@ -672,7 +672,7 @@ window.loadBroll = async files => {
     const thumb = await generateThumb(url);
     E.broll.push({ file, url, duration, name: file.name, thumb, inPoint: 0, outPoint: duration, nativeFps: null, speedRatio: 1 });
     // Yield between clips so the browser can release video decoder resources
-    await new Promise(r => setTimeout(r, 80));
+    await new Promise(r => setTimeout(r, 150));
   }
 
   const zone = document.getElementById('broll-zone');
@@ -687,13 +687,23 @@ window.loadBroll = async files => {
     const b = E.broll[i];
     b.nativeFps = await detectFps(b.url);
     b.speedRatio = E.aroll?.fps ? E.aroll.fps / b.nativeFps : 1;
+    // Yield between detections to let Safari release video resources
+    await new Promise(r => setTimeout(r, 120));
   }
 
   E.brollLoading = false;
   renderClips();
-  renderTrimCard(); // re-enable "Place at indicator" button
-  infoEl.textContent =
-    `✓ ${E.broll.length} clip${E.broll.length !== 1 ? 's' : ''} loaded`;
+  renderThumbStrip(); // update thumbnails with detected FPS
+  renderTrimCard();
+
+  // Show summary with FPS breakdown
+  const fpsCounts = {};
+  E.broll.forEach(b => {
+    const key = fmtFps(b.nativeFps || 30);
+    fpsCounts[key] = (fpsCounts[key] || 0) + 1;
+  });
+  const fpsSummary = Object.entries(fpsCounts).map(([k, v]) => `${v}×${k}`).join(', ');
+  infoEl.textContent = `✓ ${E.broll.length} clips loaded (${fpsSummary})`;
   updateExportBtn();
 };
 
@@ -708,7 +718,7 @@ function renderThumbStrip() {
         : `<div class="thumb-placeholder">🎬</div>`}
       <div class="thumb-item-footer">
         <span style="overflow:hidden;text-overflow:ellipsis">${b.name.replace(/\.[^.]+$/, '')}</span>
-        <span style="flex-shrink:0;margin-left:4px;color:var(--accent)">${fmtDur(b.duration)}</span>
+        <span style="flex-shrink:0;margin-left:4px;color:var(--accent)">${b.nativeFps ? fmtFps(b.nativeFps) + 'fps' : fmtDur(b.duration)}</span>
       </div>
     </div>
   `).join('');
