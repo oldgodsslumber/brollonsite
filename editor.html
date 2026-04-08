@@ -618,25 +618,25 @@ function extractFpsFromMdia(dv, mdiaOff, mdiaEnd) {
 
 // ── PROBE CLIP (metadata + thumbnail + FPS from header) ────
 async function probeClip(url, file) {
-  // Step 1: read FPS from binary header (instant, no video element)
-  let fps = null;
-  try { if (file) fps = await readFpsFromFile(file); } catch {}
+  const result = { duration: 0, width: 1920, height: 1080, thumb: null, fps: 30 };
 
-  // Step 2: video element for metadata + thumbnail
-  const result = { duration: 0, width: 1920, height: 1080, thumb: null, fps: fps || 30 };
-
+  // Step 1: thumbnail + metadata via video element FIRST
+  // (do this before any File reads — iOS Safari can stall blob URL loading
+  // if the underlying File is being read via slice/arrayBuffer)
   try {
-    await new Promise((resolve, reject) => {
+    await new Promise(resolve => {
       const v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto';
+      // Must be rendered (not visibility:hidden, not opacity:0) for Safari
+      // to actually decode frames. Clip it instead.
       Object.assign(v.style, { position:'fixed', top:'0', left:'0',
-                                width:'10px', height:'10px', opacity:'0',
-                                pointerEvents:'none', zIndex:'-1' });
+                                width:'1px', height:'1px', overflow:'hidden',
+                                clipPath:'inset(50%)', pointerEvents:'none', zIndex:'-1' });
       document.body.appendChild(v);
 
       let done = false;
       const cleanup = () => {
-        v.pause(); v.src = ''; v.load();
+        v.pause(); v.removeAttribute('src'); v.load();
         if (v.parentNode) v.parentNode.removeChild(v);
       };
       const finish = () => {
@@ -647,6 +647,7 @@ async function probeClip(url, file) {
       };
 
       const captureThumb = () => {
+        if (done) return;
         const vw = v.videoWidth  || 160;
         const vh = v.videoHeight || 90;
         const MAX = 160;
@@ -673,13 +674,23 @@ async function probeClip(url, file) {
         }
       };
 
-      v.onerror = () => { done = true; cleanup(); resolve(); };
-      setTimeout(finish, 6000);
+      v.onerror = () => { finish(); };
+      setTimeout(finish, 5000);
       v.src = url;
     });
   } catch (e) {
     console.warn('[probeClip] thumbnail failed:', e);
   }
+
+  // Step 2: read FPS from binary header AFTER video element is done
+  // (reading File.slice().arrayBuffer() while a blob URL video is loading
+  // can stall the video on iOS Safari)
+  try {
+    if (file) {
+      const fps = await readFpsFromFile(file);
+      if (fps) result.fps = fps;
+    }
+  } catch {}
 
   return result;
 }
