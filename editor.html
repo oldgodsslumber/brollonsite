@@ -649,30 +649,48 @@ async function probeClip(url, file) {
 
       const captureThumb = () => {
         if (done) return;
-        const vw = v.videoWidth  || 160;
-        const vh = v.videoHeight || 90;
-        const MAX = 160;
-        const scale = Math.min(MAX / vw, MAX / vh);
-        const cw = Math.round(vw * scale);
-        const ch = Math.round(vh * scale);
-        const c = document.createElement('canvas');
-        c.width = cw; c.height = ch;
-        try { c.getContext('2d').drawImage(v, 0, 0, cw, ch); } catch {}
-        result.thumb = c.toDataURL('image/jpeg', 0.7);
-        finish();
+        // Wait two rAFs for the compositor to actually paint the frame.
+        // iOS Safari fires 'seeked' before the frame is composited.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (done) return;
+          const vw = v.videoWidth  || 160;
+          const vh = v.videoHeight || 90;
+          const MAX = 160;
+          const scale = Math.min(MAX / vw, MAX / vh);
+          const cw = Math.round(vw * scale);
+          const ch = Math.round(vh * scale);
+          const c = document.createElement('canvas');
+          c.width = cw; c.height = ch;
+          try { c.getContext('2d').drawImage(v, 0, 0, cw, ch); } catch {}
+          result.thumb = c.toDataURL('image/jpeg', 0.7);
+          finish();
+        }));
       };
 
       v.onloadeddata = () => {
         result.duration = v.duration || 0;
         result.width    = v.videoWidth  || 1920;
         result.height   = v.videoHeight || 1080;
-        const t = Math.min(1, result.duration * 0.1);
-        if (t > 0.05) {
-          v.onseeked = captureThumb;
-          v.currentTime = t;
-        } else {
-          captureThumb();
-        }
+        // Play briefly then pause — forces iOS to decode at least one frame
+        v.play().then(() => {
+          v.pause();
+          const t = Math.min(1, result.duration * 0.1);
+          if (t > 0.05) {
+            v.onseeked = captureThumb;
+            v.currentTime = t;
+          } else {
+            captureThumb();
+          }
+        }).catch(() => {
+          // Autoplay blocked — try seek directly
+          const t = Math.min(1, result.duration * 0.1);
+          if (t > 0.05) {
+            v.onseeked = captureThumb;
+            v.currentTime = t;
+          } else {
+            captureThumb();
+          }
+        });
       };
 
       v.onerror = () => { finish(); };
@@ -791,7 +809,7 @@ function renderThumbStrip() {
         : `<div class="thumb-placeholder">🎬</div>`}
       <div class="thumb-item-footer">
         <span style="overflow:hidden;text-overflow:ellipsis">${b.name.replace(/\.[^.]+$/, '')}</span>
-        <span style="flex-shrink:0;margin-left:4px;color:var(--accent)">${b.nativeFps ? fmtFps(b.nativeFps) + 'fps' : fmtDur(b.duration)}</span>
+        <span style="flex-shrink:0;margin-left:4px;color:var(--accent)">${b.nativeFps ? fmtFps(b.nativeFps) + 'fps ×' + (b.speedRatio || 1).toFixed(2) : fmtDur(b.duration)}</span>
       </div>
     </div>
   `).join('');
