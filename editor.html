@@ -239,7 +239,7 @@
 
     /* ── Preview ── */
     .preview-wrap {
-      position: relative; width: 100%; aspect-ratio: 16/9;
+      position: relative; width: 100%;
       background: #000; border-radius: var(--radius-sm); overflow: hidden;
       margin-top: 12px;
     }
@@ -519,7 +519,7 @@ async function readFpsFromFile(file) {
   try {
     // Read enough for the moov atom. For fast-start (moov at start) we only
     // need a small header chunk. For non-fast-start, moov is at the end.
-    const CHUNK = Math.min(file.size, 512 * 1024); // 512KB — moov headers are small
+    const CHUNK = Math.min(file.size, 2 * 1024 * 1024); // 2MB — covers large moov atoms
     let buf = await file.slice(0, CHUNK).arrayBuffer();
     let dv = new DataView(buf);
 
@@ -627,11 +627,12 @@ async function probeClip(url, file) {
     await new Promise(resolve => {
       const v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto';
-      // Must be rendered (not visibility:hidden, not opacity:0) for Safari
-      // to actually decode frames. Clip it instead.
-      Object.assign(v.style, { position:'fixed', top:'0', left:'0',
-                                width:'1px', height:'1px', overflow:'hidden',
-                                clipPath:'inset(50%)', pointerEvents:'none', zIndex:'-1' });
+      // Safari requires GENUINELY visible elements to decode frames.
+      // No opacity:0, no visibility:hidden, no clipPath — all tell the
+      // compositor to skip rendering. 1×1px truly visible is sufficient.
+      Object.assign(v.style, { position:'fixed', bottom:'0', right:'0',
+                                width:'1px', height:'1px',
+                                pointerEvents:'none', zIndex:'-1' });
       document.body.appendChild(v);
 
       let done = false;
@@ -723,6 +724,10 @@ window.loadAroll = async file => {
 
   const vid = document.getElementById('aroll-preview');
   vid.src = url; vid.load();
+
+  // Set preview aspect ratio to match A-roll (portrait, landscape, or square)
+  const previewWrap = document.querySelector('.preview-wrap');
+  if (previewWrap) previewWrap.style.aspectRatio = `${meta.width} / ${meta.height}`;
 
   initTimeline();
   renderClips();
