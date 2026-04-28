@@ -2116,7 +2116,7 @@ SCRIPT GENERATION:
   - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption
   - Close with a soft call to action — a thought-provoking question or a next-steps nudge
   - Write in first person, natural spoken cadence, punctuated for breath pauses
-  - If no takeaway was provided, infer a strong professional angle from the event topic`;
+  - Infer a strong professional angle from the event topic`;
 }
 
 function buildSubjectSystemPrompt() {
@@ -2133,11 +2133,11 @@ SCRIPT RULES:
   - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption.
   - Close with a thought-provoking question or soft call to action that invites engagement.
   - Write in first person, natural spoken cadence, punctuated for breath pauses.
-  - If no takeaway was provided, infer a strong, specific professional insight from the topic.`;
+  - Infer a strong, specific professional insight from the topic.`;
 }
 
 function buildUserMessage(newDir) {
-  const { eventName, topic, duration, role, takeaway, subject, videoMode } = S.form;
+  const { eventName, topic, duration, role, subject, videoMode } = S.form;
   const skillLevel = S.profile?.skillLevel || 1;
   const tone       = S.profile?.tone || 'professional';
   const level      = SKILL_LABELS[skillLevel];
@@ -2166,20 +2166,17 @@ Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new 
   }
 
   if (videoMode === 'subject') {
-    const takeLine = takeaway?.trim() ? `Key message: "${takeaway.trim()}".` : '';
-    const slug     = (subject || '').trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'') || 'My-Video';
+    const slug = (subject || '').trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'') || 'My-Video';
     return `Write a ${duration}-second LinkedIn talking-head script (~${Math.round(duration * 2.3)} words). Hard cap: 60 seconds.
 Topic: "${subject}".
-${takeLine}
 Tone: ${tone}. Date: ${date}.
 
 Suggested projectName: "${slug}-${dateSlug}"`;
   }
 
-  const roleLine = role    ? `Role: ${role}.` : '';
-  const takeLine = takeaway?.trim() ? `Key takeaway: "${takeaway.trim()}".` : '';
+  const roleLine = role ? `Role: ${role}.` : '';
   const toneLine = `Script tone: ${tone}.`;
-  return `Create a shot list and talking head script for a ${duration}-second experience coverage video (${shotCount} shots) about "${topic}" at ${eventName}. Skill level: ${level}. Date: ${date}. ${roleLine} ${takeLine} ${toneLine}${lens}
+  return `Create a shot list and talking head script for a ${duration}-second experience coverage video (${shotCount} shots) about "${topic}" at ${eventName}. Skill level: ${level}. Date: ${date}. ${roleLine} ${toneLine}${lens}
 
 Suggested projectName format: "${eventName.trim().replace(/\s+/g,'-')}-${dateSlug}"`;
 }
@@ -2250,7 +2247,6 @@ async function callClaude(newDir) {
           videoType:  'thought-leadership',
           videoMode:  'subject',
           scriptOnly: true,
-          takeaway:   S.form.takeaway,
           tone:       S.profile?.tone || 'professional',
           subject:    S.form.subject,
           camera:     S.profile?.camera || '',
@@ -2279,7 +2275,6 @@ async function callClaude(newDir) {
           videoType:  S.form.videoType,
           videoMode:  S.form.videoMode,
           role:       S.form.role,
-          takeaway:   S.form.takeaway,
           tone:       S.profile?.tone || 'professional',
           camera:     S.profile?.camera || '',
           script:     parsed.script || null,
@@ -3140,7 +3135,7 @@ function builderSave() {
    SCREEN: NEW PROJECT
 ────────────────────────────────────────── */
 function startNew() {
-  S.form = { videoMode:'event', eventName:'', topic:'', duration:60, projectName:'', nameTouched:false, role:'attendee', takeaway:'', videoType:'experience-coverage', subject:'' };
+  S.form = { videoMode:'event', eventName:'', topic:'', duration:60, projectName:'', nameTouched:false, role:'attendee', videoType:'experience-coverage', subject:'' };
   // Use lens data already in profile (set when user clicked Auto-detect on profile screen).
   // No longer triggers a camera permission prompt for every new video.
   S.lensProfile = S.profile?.lenses || null;
@@ -3276,13 +3271,7 @@ function renderNew() {
         ${roles.map(([v,l])=>`<button class="seg-btn${S.form.role===v?' active':''}" onclick="S.form.role='${v}';render()">${l}</button>`).join('')}
       </div>
     </div>
-    <div class="form-group">
-      <label>One thing viewers should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
-      <input type="text" id="f-takeaway" value="${esc(S.form.takeaway)}"
-             placeholder="e.g. Automation doesn't replace people — it changes what they focus on"
-             maxlength="140"
-             oninput="S.form.takeaway=this.value" autocomplete="off">
-    </div>`;
+`;
 
   const subjectFields = `
     <div class="form-group">
@@ -3291,13 +3280,7 @@ function renderNew() {
              placeholder="e.g. Why async meetings changed how my team works"
              oninput="S.form.subject=this.value;autoName()" autocomplete="off">
     </div>
-    <div class="form-group">
-      <label>The one thing they should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
-      <input type="text" id="f-takeaway" value="${esc(S.form.takeaway)}"
-             placeholder="e.g. Async isn't about time zones — it's about protecting deep work"
-             maxlength="140"
-             oninput="S.form.takeaway=this.value" autocomplete="off">
-    </div>`;
+`;
 
   const subtitle = isEvent
     ? ''
