@@ -1798,11 +1798,20 @@ function saveProfile() {
   try { localStorage.setItem('broll_profile', JSON.stringify(S.profile)); } catch(e) {}
 }
 function loadProfile() {
-  const fallback = { skillLevel: 0, camera: '', tone: '', saved: false };
+  const fallback = { skillLevel: 0, camera: '', tone: '', saved: false, lenses: null };
   try {
     const raw = localStorage.getItem('broll_profile');
     S.profile = raw ? Object.assign({}, fallback, JSON.parse(raw)) : fallback;
   } catch { S.profile = fallback; }
+  // Hydrate runtime lensProfile from saved profile so prompt builders work
+  if (S.profile.lenses) S.lensProfile = S.profile.lenses;
+}
+
+function isMobileDevice() {
+  // Phones, tablets, and iPads (which report as desktop Safari from iOS 13+)
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return true;
+  if (/Mac/i.test(navigator.platform) && navigator.maxTouchPoints > 1) return true;
+  return false;
 }
 function profileIsSet() { return !!S.profile?.saved; }
 
@@ -3136,9 +3145,10 @@ function builderSave() {
 ────────────────────────────────────────── */
 function startNew() {
   S.form = { videoMode:'event', eventName:'', topic:'', duration:60, projectName:'', nameTouched:false, role:'attendee', takeaway:'', videoType:'experience-coverage', subject:'', audience:'' };
-  S.lensProfile = null;
+  // Use lens data already in profile (set when user clicked Auto-detect on profile screen).
+  // No longer triggers a camera permission prompt for every new video.
+  S.lensProfile = S.profile?.lenses || null;
   goTo('new');
-  detectLenses(); /* async — updates lens hint when ready */
 }
 
 function autoNameValue() {
@@ -3191,7 +3201,9 @@ function renderProfile() {
         <input type="text" id="p-camera" value="${esc(cam)}"
                placeholder="e.g. iPhone 15 Pro, GoPro Hero 12, Sony ZV-1"
                oninput="S.profile.camera=this.value" autocomplete="off">
-        <button id="detect-btn" class="btn btn-ghost camera-detect-btn" onclick="detectLensesAndFillProfile()">Auto-detect</button>
+        ${isMobileDevice()
+          ? `<button id="detect-btn" class="btn btn-ghost camera-detect-btn" onclick="detectLensesAndFillProfile()">Auto-detect</button>`
+          : ''}
       </div>
     </div>
     <button class="btn btn-primary btn-large" onclick="submitProfile()">${profileIsSet() ? 'Save changes' : 'Save profile & continue'}</button>
@@ -3223,6 +3235,8 @@ async function detectLensesAndFillProfile() {
     if (S.lensProfile.cinematic) parts.push('Cinematic');
     const desc = parts.length ? parts.join(' + ') : (S.lensProfile.count + ' cameras');
     S.profile.camera = `Phone — ${desc}`;
+    S.profile.lenses = S.lensProfile; // persist so future videos don't re-prompt
+    saveProfile();
     const inp = document.getElementById('p-camera');
     if (inp) inp.value = S.profile.camera;
   } else {
