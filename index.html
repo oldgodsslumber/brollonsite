@@ -1156,6 +1156,7 @@ input[type=range]::-moz-range-thumb {
    CONSTANTS
 ────────────────────────────────────────── */
 const DURATION_OPTS = [15, 30, 45, 60, 90, 120];
+const SUBJECT_DURATION_OPTS = [15, 30, 45, 60]; /* Talking-head only — capped at 60s */
 const SKILL_LABELS  = ['', 'Beginner', 'Intermediate', 'Advanced'];
 const SKILL_TIPS    = [
   '',
@@ -1738,19 +1739,18 @@ const LOADING_MSGS = [
 const S = {
   screen: 'home',
   form: {
-    eventName:     '',
-    eventLocation: '',
-    topic:         '',
-    duration:      60,
-    skillLevel:    1,
-    projectName:   '',
-    nameTouched:   false,
+    eventName:   '',
+    topic:       '',
+    duration:    60,
+    projectName: '',
+    nameTouched: false,
   },
   project:          null,
   projects:         [],
   lensProfile:      null,
   modalShotId:      null,
   reorderMode:      false,
+  editMode:         false,
   customFormOpen:   false,
   customSectionTarget: null,  /* which section "Add Shot" was clicked from */
   newDirOpen:       false,
@@ -1765,6 +1765,8 @@ const S = {
   lessonsRead:  [],
   badges:       [],
   badgeTiers:   {},
+  /* User profile — set once on first launch, used for every video */
+  profile:      { skillLevel: 0, camera: '', tone: '', saved: false },
 };
 
 /* ──────────────────────────────────────────
@@ -1792,6 +1794,17 @@ function saveLessonsRead() {
 function loadLessonsRead() {
   try { S.lessonsRead = JSON.parse(localStorage.getItem('broll_lessons_read') || '[]'); } catch { S.lessonsRead = []; }
 }
+function saveProfile() {
+  try { localStorage.setItem('broll_profile', JSON.stringify(S.profile)); } catch(e) {}
+}
+function loadProfile() {
+  const fallback = { skillLevel: 0, camera: '', tone: '', saved: false };
+  try {
+    const raw = localStorage.getItem('broll_profile');
+    S.profile = raw ? Object.assign({}, fallback, JSON.parse(raw)) : fallback;
+  } catch { S.profile = fallback; }
+}
+function profileIsSet() { return !!S.profile?.saved; }
 
 /* ──────────────────────────────────────────
    UTILITIES
@@ -1799,6 +1812,11 @@ function loadLessonsRead() {
 function generateId() { return 'id-' + Math.random().toString(36).slice(2,9); }
 function countDone()  { return S.project ? S.project.shots.filter(s => s.completed).length : 0; }
 function copyScript() { if (S.project?.script) navigator.clipboard.writeText(S.project.script).then(()=>showBanner('Script copied to clipboard!','success',2500)); }
+
+/* Duration options depend on the active video mode (subject is capped at 60s) */
+function currentDurationOpts() {
+  return S.form?.videoMode === 'subject' ? SUBJECT_DURATION_OPTS : DURATION_OPTS;
+}
 
 /* Extract ordered section names from a shots array (preserving first-seen order) */
 function extractSections(shots) {
@@ -1854,7 +1872,12 @@ function esc(str) {
 /* ──────────────────────────────────────────
    NAVIGATION & RENDER
 ────────────────────────────────────────── */
-function goTo(screen) { S.screen = screen; render(); }
+function goTo(screen) {
+  /* If the user hasn't filled out their profile yet, force them there first */
+  if (!profileIsSet() && screen !== 'profile') screen = 'profile';
+  S.screen = screen;
+  render();
+}
 
 function render() {
   clearInterval(S._loadingTimer);
@@ -1869,6 +1892,7 @@ function render() {
     builder:   renderBuilder,
     school:    renderSchool,
     lesson:    renderLesson,
+    profile:   renderProfile,
   };
   el.innerHTML = (screens[S.screen] || renderHome)();
   bindEvents();
@@ -1878,15 +1902,18 @@ function render() {
 function updateHeader() {
   const h = document.getElementById('app-header');
   if (!h) return;
-  const showBack     = S.screen !== 'home';
+  const isProfileLocked = S.screen === 'profile' && !profileIsSet();
+  const showBack     = S.screen !== 'home' && !isProfileLocked;
   const isChecklist = S.screen === 'checklist' && S.project;
+  const isScriptOnly = isChecklist && S.project.scriptOnly;
   const lessonTitle = S.lessonId ? (LESSONS.find(l=>l.id===S.lessonId)?.title || 'Lesson') : 'Lesson';
-  const titles = { home:'<span class="blue">Film</span> Kit', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder', school: '🎬 School', lesson: esc(lessonTitle) };
+  const titles = { home:'<span class="blue">Film</span> Kit', new:'New Project', loading:'Generating…', checklist: esc(S.project?.name||'Shot List'), builder: 'Shot Builder', school: '🎬 School', lesson: esc(lessonTitle), profile: 'Your Profile' };
   h.innerHTML = `<div class="hdr-inner">
     ${showBack ? `<button class="hdr-btn" onclick="goBack()" title="Back">←</button>` : ''}
     <div class="hdr-title">${titles[S.screen]||'Film Kit'}</div>
-    ${isChecklist ? `<button class="hdr-btn" onclick="toggleReorderMode()" title="${S.reorderMode ? 'Done reordering' : 'Edit shot order'}" style="${S.reorderMode ? 'color:var(--accent)' : ''}">${S.reorderMode ? 'Done' : '⠿'}</button>` : ''}
-    ${isChecklist && !S.reorderMode ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
+    ${isChecklist && !S.reorderMode && !isScriptOnly ? `<button class="hdr-btn" onclick="toggleEditMode()" title="${S.editMode ? 'Done editing' : 'Edit project'}" style="${S.editMode ? 'color:var(--accent)' : ''}">${S.editMode ? 'Done' : '✎'}</button>` : ''}
+    ${isChecklist && !S.editMode && !isScriptOnly ? `<button class="hdr-btn" onclick="toggleReorderMode()" title="${S.reorderMode ? 'Done reordering' : 'Edit shot order'}" style="${S.reorderMode ? 'color:var(--accent)' : ''}">${S.reorderMode ? 'Done' : '⠿'}</button>` : ''}
+    ${isChecklist && !S.reorderMode && !S.editMode ? `<button class="hdr-btn" onclick="downloadProject(S.project.id)" title="Save JSON">↓</button>` : ''}
   </div>`;
 }
 
@@ -1894,6 +1921,7 @@ function goBack() {
   S.customFormOpen = false;
   S.newDirOpen = false;
   S.reorderMode = false;
+  S.editMode = false;
   const dest = S.prevScreen || 'home';
   S.prevScreen = 'home';
   goTo(dest);
@@ -1903,19 +1931,20 @@ function bindEvents() {
   /* Duration slider */
   const dur = document.getElementById('f-duration');
   if (dur) dur.addEventListener('input', () => {
-    S.form.duration = DURATION_OPTS[+dur.value] || 60;
+    const opts = currentDurationOpts();
+    S.form.duration = opts[+dur.value] || opts[opts.length - 1] || 60;
     const lbl = document.getElementById('dur-label');
     if (lbl) lbl.textContent = S.form.duration + ' seconds';
   });
 
-  /* Skill slider */
-  const skl = document.getElementById('f-skill');
-  if (skl) skl.addEventListener('input', () => {
-    S.form.skillLevel = +skl.value;
+  /* Profile skill slider */
+  const psk = document.getElementById('p-skill');
+  if (psk) psk.addEventListener('input', () => {
+    S.profile.skillLevel = +psk.value;
     const lbl = document.getElementById('skill-label');
     const tip = document.getElementById('skill-tip');
-    if (lbl) lbl.textContent = SKILL_LABELS[S.form.skillLevel];
-    if (tip) tip.textContent = SKILL_TIPS[S.form.skillLevel];
+    if (lbl) lbl.textContent = SKILL_LABELS[S.profile.skillLevel];
+    if (tip) tip.textContent = SKILL_TIPS[S.profile.skillLevel];
   });
 
   /* New direction textarea live-save */
@@ -1990,7 +2019,7 @@ function lensHtml() {
 }
 
 function lensPromptHint() {
-  const manual = (S.form?.camera || '').trim();
+  const manual = (S.profile?.camera || '').trim();
   const lines = [];
   if (S.lensProfile?.ultrawide) lines.push('ultrawide lens (great for wide establishing shots)');
   if (S.lensProfile?.telephoto) lines.push('telephoto/zoom lens (great for compressed close-ups and speaker shots)');
@@ -1999,25 +2028,6 @@ function lensPromptHint() {
   if (manual) return `\nCamera: ${manual}. Suggest shots that suit this device.`;
   if (lines.length) return `\nThis user's phone has: ${lines.join(', ')}. Include shots that leverage these lenses.`;
   return '';
-}
-
-async function detectLensesAndFill() {
-  const btn = document.getElementById('detect-btn');
-  if (btn) { btn.textContent = 'Detecting…'; btn.disabled = true; }
-  await detectLenses();
-  if (btn) { btn.textContent = 'Auto-detect'; btn.disabled = false; }
-  if (S.lensProfile?.labels?.length) {
-    const parts = [];
-    if (S.lensProfile.ultrawide) parts.push('Ultrawide');
-    if (S.lensProfile.telephoto) parts.push('Telephoto');
-    if (S.lensProfile.cinematic) parts.push('Cinematic');
-    const desc = parts.length ? parts.join(' + ') : (S.lensProfile.count + ' cameras');
-    S.form.camera = `Phone — ${desc}`;
-    const inp = document.getElementById('f-camera');
-    if (inp) inp.value = S.form.camera;
-  } else {
-    showBanner('Could not detect — enter your device manually.', 'warn', 3000);
-  }
 }
 
 /* ──────────────────────────────────────────
@@ -2101,71 +2111,39 @@ SCRIPT GENERATION:
 }
 
 function buildSubjectSystemPrompt() {
-  return `You are an expert LinkedIn content strategist and videographer helping professionals create thought-leadership video content. Your job is to generate a b-roll shot list and a talking head script for a short-form LinkedIn video on a specific topic or point of view.
-
-B-ROLL SHOT TYPES AVAILABLE:
-  static     – Camera completely locked off, no movement
-  pan        – Horizontal rotation left/right
-  tilt       – Vertical rotation up/down
-  tracking   – Camera physically follows a moving subject
-  slow-mo    – Captured at high frame rate (60fps or 120fps) for slow playback
-  hyperlapse – Walking shot dramatically sped up via the Mimo app
-  timelapse  – Stationary scene captured over time via the Mimo app
-  zoom       – Move closer to subject or use optical zoom
-
-SKILL-LEVEL RULES (strictly enforced):
-  Beginner (1)     → ONLY: static, pan, tilt
-  Intermediate (2) → Beginner types PLUS: tracking, slow-mo (fps: "60")
-  Advanced (3)     → All types including: hyperlapse, timelapse, slow-mo (fps: "120"), zoom
-
-SECTIONS — assign every shot to exactly one of these section names (use the exact string):
-  "Environment"   – the space where filming happens: desk, café, office, outdoors
-  "The Subject"   – objects, screens, tools, whiteboards, or anything that illustrates the topic
-  "People"        – colleagues, candid human moments, natural reactions
-  "Details"       – macro textures that add visual rhythm and interest
-  "Moments"       – authentic unguarded moments: thinking, working, a quiet pause
-
-SHOT ORDERING: shots should flow Environment → The Subject → People → Details → Moments
-
-SHOT COUNT: Generate EXACTLY Math.round(durationSeconds / 4) shots. Example: 60s → 15 shots, 30s → 8 shots.
-
-STRETCH SHOTS (REQUIRED):
-  The last 1–2 shots must be creative "stretch" shots — unusual framings that push the user without requiring special apps. Native types only: static, pan, tilt, tracking, zoom.
-  Scale by skill: Beginner = unusual static angle; Intermediate = pan through a foreground object; Advanced = candid zoom or tracking through foreground.
-  Mark with "stretch": true. All others get "stretch": false.
+  return `You are an expert LinkedIn content strategist helping professionals create thought-leadership talking head scripts. Your job is to write a tight, punchy script for a short-form LinkedIn video on a specific topic or point of view. No b-roll — just the script.
 
 OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary. Schema:
-{"projectName":"string","script":"string","shots":[{"id":"shot-1","type":"string","section":"string","title":"string max 55 chars","description":"2-3 sentence instruction","duration":"X-Ys","tip":"one specific technique tip","app":null,"fps":null,"completed":false,"custom":false,"stretch":false}]}
-  - section: one of the 5 section names above
-  - app: null or "Mimo" (for hyperlapse/timelapse only)
-  - fps: null or "60" or "120" (for slow-mo only)
+{"projectName":"string","script":"string"}
 
-SCRIPT GENERATION:
-  The "script" field is a 60–90 second talking head script for LinkedIn. This is a perspective piece, NOT an event recap.
+SCRIPT RULES:
+  - Target the requested duration (~2.3 spoken words per second). HARD CAP: 60 seconds (~140 words). Never exceed this.
   - Open with a hook: a counter-intuitive observation, a question the audience hasn't asked themselves, or a surprising statement about the topic. NEVER start with "Hey everyone" or introduce yourself.
-  - Use the audience field (if provided) to tune vocabulary and framing
-  - Tone guide: professional = measured, 2–3 incisive observations; excited = high energy, personal story; personal = candid, honest, a moment of real reflection
-  - Length: 3–5 short paragraphs, each 2–3 sentences. No bullet points.
-  - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption
-  - Close with a thought-provoking question or a soft call to action that invites the audience to engage
-  - Write in first person, natural spoken cadence, punctuated for pauses
-  - If no takeaway was provided, infer a strong, specific professional insight from the topic`;
+  - Use the audience field (if provided) to tune vocabulary and framing.
+  - Tone guide: professional = measured, 2–3 incisive observations; excited = high energy, personal story; personal = candid, honest, a moment of real reflection.
+  - Structure: 3–5 short paragraphs, each 1–3 sentences. No bullet points. No headings.
+  - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption.
+  - Close with a thought-provoking question or soft call to action that invites engagement.
+  - Write in first person, natural spoken cadence, punctuated for breath pauses.
+  - If no takeaway was provided, infer a strong, specific professional insight from the topic.`;
 }
 
 function buildUserMessage(newDir) {
-  const { eventName, eventLocation, topic, duration, skillLevel, role, takeaway, tone, subject, audience, videoMode } = S.form;
-  const level     = SKILL_LABELS[skillLevel];
-  const date      = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
-  const lens      = lensPromptHint();
-  const shotCount = Math.round(duration / 4);
-  const dateSlug  = new Date().toISOString().slice(0,10);
+  const { eventName, topic, duration, role, takeaway, subject, audience, videoMode } = S.form;
+  const skillLevel = S.profile?.skillLevel || 1;
+  const tone       = S.profile?.tone || 'professional';
+  const level      = SKILL_LABELS[skillLevel];
+  const date       = new Date().toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'});
+  const lens       = lensPromptHint();
+  const shotCount  = Math.round(duration / 4);
+  const dateSlug   = new Date().toISOString().slice(0,10);
 
   if (newDir) {
     const done   = S.project.shots.filter(s => s.completed);
     const undone = S.project.shots.filter(s => !s.completed);
     const brief  = videoMode === 'subject'
       ? `${duration}-second video on the topic: "${subject}".`
-      : `${duration}-second video about "${topic}" at ${eventLocation ? `${eventName} in ${eventLocation}` : eventName}.`;
+      : `${duration}-second video about "${topic}" at ${eventName}.`;
     return `Original brief: ${brief} Skill: ${level}.${lens}
 
 SHOTS ALREADY FILMED – keep these VERBATIM in your response (do not alter them):
@@ -2183,19 +2161,18 @@ Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new 
     const audLine  = audience?.trim() ? `Audience: ${audience.trim()}.` : '';
     const takeLine = takeaway?.trim() ? `Key message: "${takeaway.trim()}".` : '';
     const slug     = (subject || '').trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'') || 'My-Video';
-    return `Create a thought-leadership shot list and talking head script for a ${duration}-second LinkedIn video (${shotCount} shots).
+    return `Write a ${duration}-second LinkedIn talking-head script (~${Math.round(duration * 2.3)} words). Hard cap: 60 seconds.
 Topic: "${subject}".
 ${audLine} ${takeLine}
-Tone: ${tone}. Skill level: ${level}. Date: ${date}.${lens}
+Tone: ${tone}. Date: ${date}.
 
 Suggested projectName: "${slug}-${dateSlug}"`;
   }
 
-  const fullEvent = eventLocation ? `${eventName} in ${eventLocation}` : eventName;
-  const roleLine  = role    ? `Role: ${role}.` : '';
-  const takeLine  = takeaway?.trim() ? `Key takeaway: "${takeaway.trim()}".` : '';
-  const toneLine  = tone    ? `Script tone: ${tone}.` : '';
-  return `Create a shot list and talking head script for a ${duration}-second experience coverage video (${shotCount} shots) about "${topic}" at ${fullEvent}. Skill level: ${level}. Date: ${date}. ${roleLine} ${takeLine} ${toneLine}${lens}
+  const roleLine = role    ? `Role: ${role}.` : '';
+  const takeLine = takeaway?.trim() ? `Key takeaway: "${takeaway.trim()}".` : '';
+  const toneLine = `Script tone: ${tone}.`;
+  return `Create a shot list and talking head script for a ${duration}-second experience coverage video (${shotCount} shots) about "${topic}" at ${eventName}. Skill level: ${level}. Date: ${date}. ${roleLine} ${takeLine} ${toneLine}${lens}
 
 Suggested projectName format: "${eventName.trim().replace(/\s+/g,'-')}-${dateSlug}"`;
 }
@@ -2239,14 +2216,50 @@ async function callClaude(newDir) {
       try { parsed = JSON.parse(text); }
       catch { if (attempt < 2) { await sleep(1500); continue; } throw new Error('Claude returned unexpected output — try again.'); }
 
-      if (!Array.isArray(parsed.shots) || !parsed.shots.length) throw new Error('No shots were returned — try adjusting your inputs.');
+      const isScriptOnly = !newDir && S.form.videoMode === 'subject';
+
+      if (isScriptOnly) {
+        if (!parsed.script || !String(parsed.script).trim()) throw new Error('No script was returned — try again.');
+      } else if (!Array.isArray(parsed.shots) || !parsed.shots.length) {
+        throw new Error('No shots were returned — try adjusting your inputs.');
+      }
 
       if (newDir) {
         S.project.shots = parsed.shots;
         S.project.sections = extractSections(parsed.shots);
+        if (parsed.script) S.project.script = parsed.script;
         saveProjects();
         S.newDirOpen = false;
         S.newDirText = '';
+      } else if (isScriptOnly) {
+        const pname = (parsed.projectName || S.form.projectName || autoNameValue()).slice(0,60);
+        const project = {
+          id:         generateId(),
+          name:       pname,
+          createdAt:  new Date().toISOString(),
+          topic:      S.form.subject,
+          duration:   S.form.duration,
+          skillLevel: S.profile?.skillLevel || 1,
+          videoType:  'thought-leadership',
+          videoMode:  'subject',
+          scriptOnly: true,
+          takeaway:   S.form.takeaway,
+          tone:       S.profile?.tone || 'professional',
+          subject:    S.form.subject,
+          audience:   S.form.audience,
+          camera:     S.profile?.camera || '',
+          script:     parsed.script,
+          shots:      [],
+          sections:   [],
+        };
+        S.projects.unshift(project);
+        S.project = project;
+        saveProjects();
+        try {
+          const n = (parseInt(localStorage.getItem('broll_projects_generated')||'0',10)||0) + 1;
+          localStorage.setItem('broll_projects_generated', n);
+          if (n >= 5) checkBadge('shot-caller');
+        } catch(e) {}
       } else {
         const pname = (parsed.projectName || S.form.projectName || autoNameValue()).slice(0,60);
         const project = {
@@ -2254,18 +2267,15 @@ async function callClaude(newDir) {
           name:       pname,
           createdAt:  new Date().toISOString(),
           event:      S.form.eventName,
-          location:   S.form.eventLocation,
           topic:      S.form.topic,
           duration:   S.form.duration,
-          skillLevel: S.form.skillLevel,
+          skillLevel: S.profile?.skillLevel || 1,
           videoType:  S.form.videoType,
           videoMode:  S.form.videoMode,
           role:       S.form.role,
           takeaway:   S.form.takeaway,
-          tone:       S.form.tone,
-          subject:    S.form.subject,
-          audience:   S.form.audience,
-          camera:     S.form.camera,
+          tone:       S.profile?.tone || 'professional',
+          camera:     S.profile?.camera || '',
           script:     parsed.script || null,
           shots:      parsed.shots,
           sections:   extractSections(parsed.shots),
@@ -2323,11 +2333,9 @@ function onFileLoad(input) {
       if (idx >= 0) S.projects[idx] = p; else S.projects.unshift(p);
       S.project = p;
       /* Restore form context for new-direction calls */
-      S.form.eventName     = p.event      || '';
-      S.form.eventLocation = p.location  || '';
-      S.form.topic         = p.topic     || '';
-      S.form.duration      = p.duration  || 60;
-      S.form.skillLevel  = p.skillLevel || 1;
+      S.form.eventName = p.event ? (p.location ? `${p.event}, ${p.location}` : p.event) : '';
+      S.form.topic     = p.topic    || '';
+      S.form.duration  = p.duration || 60;
       saveProjects();
       goTo('checklist');
     } catch(err) { showBanner('Could not load file: ' + err.message, 'danger'); }
@@ -2384,15 +2392,16 @@ function openProject(id) {
   const p = S.projects.find(x => x.id === id);
   if (!p) return;
   ensureSections(p);
-  S.project       = p;
-  S.form.eventName     = p.event     || '';
-  S.form.eventLocation = p.location || '';
-  S.form.topic         = p.topic    || '';
-  S.form.duration      = p.duration || 60;
-  S.form.skillLevel = p.skillLevel || 1;
-  S.customFormOpen  = false;
+  S.project = p;
+  S.form.eventName = p.event ? (p.location ? `${p.event}, ${p.location}` : p.event) : '';
+  S.form.topic     = p.topic    || '';
+  S.form.duration  = p.duration || 60;
+  S.form.subject   = p.subject  || '';
+  S.form.audience  = p.audience || '';
+  S.form.videoMode = p.videoMode || (p.subject ? 'subject' : 'event');
+  S.customFormOpen = false;
   S.customSectionTarget = null;
-  S.newDirOpen      = false;
+  S.newDirOpen     = false;
   goTo('checklist');
 }
 
@@ -2505,9 +2514,21 @@ function toggleReorderMode() {
   if (S.reorderMode) {
     S.customFormOpen = false;
     S.newDirOpen = false;
+    S.editMode = false;
   }
   goTo('checklist');
   if (S.reorderMode) bindDragHandles();
+}
+
+function toggleEditMode() {
+  S.editMode = !S.editMode;
+  if (S.editMode) {
+    S.reorderMode = false;
+  } else {
+    S.customFormOpen = false;
+    S.newDirOpen = false;
+  }
+  goTo('checklist');
 }
 
 /* ── Pointer drag state ── */
@@ -2904,6 +2925,7 @@ function renderHome() {
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
       <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 School</button>
       <button class="btn btn-ghost btn-full" onclick="window.open('editor.html','_blank')">🎞 Video Editor</button>
+      <button class="btn btn-ghost btn-full" onclick="goTo('profile')">👤 User Profile</button>
     </div>`;
   }
 
@@ -2936,6 +2958,7 @@ function renderHome() {
       <button class="btn btn-ghost btn-full" onclick="document.getElementById('file-input').click()">📂 Load Project from File</button>
       <button class="btn btn-ghost btn-full" onclick="goToSchool()">🎬 School</button>
       <button class="btn btn-ghost btn-full" onclick="window.open('editor.html','_blank')">🎞 Video Editor</button>
+      <button class="btn btn-ghost btn-full" onclick="goTo('profile')">👤 User Profile</button>
     </div>`;
 }
 
@@ -3112,10 +3135,10 @@ function builderSave() {
    SCREEN: NEW PROJECT
 ────────────────────────────────────────── */
 function startNew() {
-  S.form = { videoMode:'event', eventName:'', eventLocation:'', topic:'', duration:60, skillLevel:1, projectName:'', nameTouched:false, role:'attendee', takeaway:'', tone:'professional', videoType:'experience-coverage', camera:'', subject:'', audience:'' };
+  S.form = { videoMode:'event', eventName:'', topic:'', duration:60, projectName:'', nameTouched:false, role:'attendee', takeaway:'', videoType:'experience-coverage', subject:'', audience:'' };
   S.lensProfile = null;
   goTo('new');
-  detectLenses(); /* async — updates badge when ready */
+  detectLenses(); /* async — updates lens hint when ready */
 }
 
 function autoNameValue() {
@@ -3136,52 +3159,100 @@ function autoName() {
   if (el && document.activeElement !== el) el.textContent = S.form.projectName;
 }
 
-function renderNew() {
-  const durIdx = Math.max(0, DURATION_OPTS.indexOf(S.form.duration));
-  const roles  = [['attendee','Attendee'],['speaker','Speaker'],['organiser','Organiser'],['exhibitor','Exhibitor']];
-  const tones  = [['professional','Thoughtful & Professional'],['excited','Energetic & Excited'],['personal','Candid & Personal']];
-  const isEvent = S.form.videoMode !== 'subject';
-
-  const sharedToneFields = `
+/* ──────────────────────────────────────────
+   SCREEN: USER PROFILE
+────────────────────────────────────────── */
+function renderProfile() {
+  const tones = [['professional','Thoughtful & Professional'],['excited','Energetic & Excited'],['personal','Candid & Personal']];
+  const skill = S.profile.skillLevel || 1;
+  const tone  = S.profile.tone || 'professional';
+  const cam   = S.profile.camera || '';
+  const intro = profileIsSet()
+    ? `<p style="color:var(--muted);margin-bottom:18px">Update your default skill level, camera, and talking-head tone. We'll use these for every new video.</p>`
+    : `<p style="color:var(--muted);margin-bottom:18px">Welcome! Tell us about your setup once and we'll use it for every video. You can update this any time.</p>`;
+  return `<div>
+    <div class="screen-title">Your profile</div>
+    ${intro}
     <div class="form-group">
       <label>Tone for your talking head</label>
       <div class="seg-group">
-        ${tones.map(([v,l])=>`<button class="seg-btn${S.form.tone===v?' active':''}" onclick="S.form.tone='${v}';render()">${l}</button>`).join('')}
+        ${tones.map(([v,l])=>`<button class="seg-btn${tone===v?' active':''}" onclick="S.profile.tone='${v}';render()">${l}</button>`).join('')}
       </div>
     </div>
     <div class="form-group">
-      <label>Video length: <strong id="dur-label">${S.form.duration} seconds</strong></label>
-      <input type="range" id="f-duration" min="0" max="5" step="1" value="${durIdx}">
-      <div class="slider-labels">${DURATION_OPTS.map(d=>`<span>${d}s</span>`).join('')}</div>
-    </div>
-    <div class="form-group">
-      <label>Your skill level: <strong id="skill-label">${SKILL_LABELS[S.form.skillLevel]}</strong></label>
-      <input type="range" id="f-skill" min="1" max="3" step="1" value="${S.form.skillLevel}">
+      <label>Your skill level: <strong id="skill-label">${SKILL_LABELS[skill]}</strong></label>
+      <input type="range" id="p-skill" min="1" max="3" step="1" value="${skill}">
       <div class="slider-labels"><span>Beginner</span><span>Intermediate</span><span>Advanced</span></div>
-      <div class="skill-tip" id="skill-tip">${SKILL_TIPS[S.form.skillLevel]}</div>
+      <div class="skill-tip" id="skill-tip">${SKILL_TIPS[skill]}</div>
     </div>
     <div class="form-group">
       <label>Camera or phone</label>
       <div class="camera-field-wrap">
-        <input type="text" id="f-camera" value="${esc(S.form.camera)}"
+        <input type="text" id="p-camera" value="${esc(cam)}"
                placeholder="e.g. iPhone 15 Pro, GoPro Hero 12, Sony ZV-1"
-               oninput="S.form.camera=this.value" autocomplete="off">
-        <button id="detect-btn" class="btn btn-ghost camera-detect-btn" onclick="detectLensesAndFill()">Auto-detect</button>
+               oninput="S.profile.camera=this.value" autocomplete="off">
+        <button id="detect-btn" class="btn btn-ghost camera-detect-btn" onclick="detectLensesAndFillProfile()">Auto-detect</button>
       </div>
+    </div>
+    <button class="btn btn-primary btn-large" onclick="submitProfile()">${profileIsSet() ? 'Save changes' : 'Save profile & continue'}</button>
+  </div>`;
+}
+
+function submitProfile() {
+  const sk = document.getElementById('p-skill');
+  if (sk) S.profile.skillLevel = +sk.value || 1;
+  const cm = document.getElementById('p-camera');
+  if (cm) S.profile.camera = cm.value || '';
+  if (!S.profile.skillLevel) S.profile.skillLevel = 1;
+  if (!S.profile.tone) S.profile.tone = 'professional';
+  S.profile.saved = true;
+  saveProfile();
+  showBanner('Profile saved!', 'success', 2000);
+  goTo('home');
+}
+
+async function detectLensesAndFillProfile() {
+  const btn = document.getElementById('detect-btn');
+  if (btn) { btn.textContent = 'Detecting…'; btn.disabled = true; }
+  await detectLenses();
+  if (btn) { btn.textContent = 'Auto-detect'; btn.disabled = false; }
+  if (S.lensProfile?.labels?.length) {
+    const parts = [];
+    if (S.lensProfile.ultrawide) parts.push('Ultrawide');
+    if (S.lensProfile.telephoto) parts.push('Telephoto');
+    if (S.lensProfile.cinematic) parts.push('Cinematic');
+    const desc = parts.length ? parts.join(' + ') : (S.lensProfile.count + ' cameras');
+    S.profile.camera = `Phone — ${desc}`;
+    const inp = document.getElementById('p-camera');
+    if (inp) inp.value = S.profile.camera;
+  } else {
+    showBanner('Could not detect — enter your device manually.', 'warn', 3000);
+  }
+}
+
+function renderNew() {
+  const isEvent = S.form.videoMode !== 'subject';
+  const durOpts = isEvent ? DURATION_OPTS : SUBJECT_DURATION_OPTS;
+  /* Clamp to subject cap (60s) when in subject mode */
+  if (!isEvent && S.form.duration > 60) S.form.duration = 60;
+  const durIdx = Math.max(0, durOpts.indexOf(S.form.duration));
+  const roles  = [['attendee','Attendee'],['speaker','Speaker'],['organiser','Organiser'],['exhibitor','Exhibitor']];
+
+  const durationLabel = isEvent ? 'Video length' : 'Script length';
+  const sharedToneFields = `
+    <div class="form-group">
+      <label>${durationLabel}: <strong id="dur-label">${S.form.duration} seconds</strong></label>
+      <input type="range" id="f-duration" min="0" max="${durOpts.length - 1}" step="1" value="${durIdx}">
+      <div class="slider-labels">${durOpts.map(d=>`<span>${d}s</span>`).join('')}</div>
+      ${!isEvent ? `<div class="skill-tip visible">Capped at 60s — nobody wants to watch a talking head longer than that.</div>` : ''}
     </div>`;
 
   const eventFields = `
     <div class="form-group">
-      <label>Event name</label>
+      <label>Event name &amp; location</label>
       <input type="text" id="f-event" value="${esc(S.form.eventName)}"
-             placeholder="e.g. PegaWorld iGov Summit"
+             placeholder="e.g. PegaWorld iGov Summit, Las Vegas, NV"
              oninput="S.form.eventName=this.value;autoName()" autocomplete="off">
-    </div>
-    <div class="form-group">
-      <label>Location</label>
-      <input type="text" id="f-location" value="${esc(S.form.eventLocation)}"
-             placeholder="e.g. Las Vegas, NV"
-             oninput="S.form.eventLocation=this.value" autocomplete="off">
     </div>
     <div class="form-group">
       <label>What is the video about?</label>
@@ -3224,13 +3295,19 @@ function renderNew() {
              oninput="S.form.takeaway=this.value" autocomplete="off">
     </div>`;
 
+  const subtitle = isEvent
+    ? ''
+    : `<p style="color:var(--muted);margin:-8px 0 14px;font-size:13px">We'll write you a punchy talking-head script. No b-roll list — just the words.</p>`;
+  const ctaLabel = isEvent ? '✨ Generate My Shot List' : '✨ Generate My Script';
+
   return `<div>
     <div class="screen-title">Create a video about…</div>
 
     <div class="tab-group">
-      <button class="tab-btn${isEvent?' active':''}" onclick="S.form.videoMode='event';render()">Attending an event</button>
-      <button class="tab-btn${!isEvent?' active':''}" onclick="S.form.videoMode='subject';render()">A topic or subject</button>
+      <button class="tab-btn${isEvent?' active':''}" onclick="switchVideoMode('event')">Attending an event</button>
+      <button class="tab-btn${!isEvent?' active':''}" onclick="switchVideoMode('subject')">A topic or subject</button>
     </div>
+    ${subtitle}
 
     ${isEvent ? eventFields : subjectFields}
     ${sharedToneFields}
@@ -3244,9 +3321,15 @@ function renderNew() {
     </div>
 
     <button class="btn btn-primary btn-large" onclick="validateAndGenerate()">
-      ✨ Generate My Shot List
+      ${ctaLabel}
     </button>
   </div>`;
+}
+
+function switchVideoMode(mode) {
+  S.form.videoMode = mode;
+  if (mode === 'subject' && S.form.duration > 60) S.form.duration = 60;
+  render();
 }
 
 function validateAndGenerate() {
@@ -3254,8 +3337,7 @@ function validateAndGenerate() {
     if (!S.form.subject.trim()) { showBanner('Please describe what your video is about.', 'danger'); document.getElementById('f-subject')?.focus(); return; }
     S.form.videoType = 'thought-leadership';
   } else {
-    if (!S.form.eventName.trim()) { showBanner('Please enter an event name.', 'danger'); document.getElementById('f-event')?.focus(); return; }
-    if (!S.form.eventLocation.trim()) { showBanner('Please enter a location.', 'danger'); document.getElementById('f-location')?.focus(); return; }
+    if (!S.form.eventName.trim()) { showBanner('Please enter an event name & location.', 'danger'); document.getElementById('f-event')?.focus(); return; }
     if (!S.form.topic.trim()) { showBanner('Please tell us what the video is about.', 'danger'); document.getElementById('f-topic')?.focus(); return; }
     S.form.videoType = 'experience-coverage';
   }
@@ -3267,8 +3349,36 @@ function validateAndGenerate() {
 /* ──────────────────────────────────────────
    SCREEN: CHECKLIST
 ────────────────────────────────────────── */
+function renderScriptProject() {
+  const p = S.project;
+  const dur = p.duration || 60;
+  const scriptHtml = esc(p.script || '').replace(/\n\n+/g,'</p><p>').replace(/\n/g,'<br>');
+  return `<div class="checklist-hdr">
+    <span class="proj-title-edit" contenteditable="true" role="textbox"
+          oninput="S.project.name=this.textContent.trim();saveProjects();updateHeader()"
+          >${esc(p.name||'Untitled')}</span>
+    <div class="checklist-type-label">Talking Head Script · ${dur}s</div>
+  </div>
+
+  <div class="tip-banner">🎙 Read this for the camera. Aim for natural cadence — pause where you'd breathe.</div>
+
+  <div class="script-card">
+    <div class="script-card-hdr">
+      <span class="script-card-title">Your Script</span>
+      <button class="btn btn-ghost btn-sm" onclick="copyScript()">Copy</button>
+    </div>
+    <div class="script-card-body"><p>${scriptHtml}</p></div>
+  </div>
+
+  <div class="checklist-footer">
+    <button class="btn btn-ghost" onclick="downloadProject(S.project.id)">↓ Save as JSON</button>
+    <button class="btn btn-ghost" onclick="goTo('home')">← All Projects</button>
+  </div>`;
+}
+
 function renderChecklist() {
   if (!S.project) return `<p style="color:var(--muted);padding:40px 0;text-align:center">No project loaded. <button class="btn btn-ghost btn-sm" onclick="goTo('home')">Go Home</button></p>`;
+  if (S.project.scriptOnly) return renderScriptProject();
   ensureSections(S.project);
   const done  = countDone();
   const total = S.project.shots.length;
@@ -3284,7 +3394,7 @@ function renderChecklist() {
     const secHandle = S.reorderMode
       ? `<span class="section-drag-handle" data-drag-section="${esc(sec)}" title="Drag to reorder section">⠿</span>`
       : '';
-    const addShotBtn = S.reorderMode
+    const addShotBtn = (S.reorderMode || !S.editMode)
       ? ''
       : `<button class="btn btn-ghost add-custom-btn" style="margin-top:6px;font-size:12px;padding:6px" onclick="showCustomForm('${esc(sec)}')">＋ Add Shot to this Section</button>`;
     return `<div class="shot-section" data-section="${esc(sec)}">
@@ -3340,11 +3450,11 @@ function renderChecklist() {
     <button class="btn btn-ghost btn-full" onclick="window.open('editor.html','_blank')" style="margin-top:8px">🎬 Open Browser Video Editor →</button>
   </div>` : ''}
 
-  ${S.reorderMode ? '' : `<div id="add-section-area">${addSectionAreaHtml()}</div>`}
+  ${(S.reorderMode || !S.editMode) ? '' : `<div id="add-section-area">${addSectionAreaHtml()}</div>`}
 
-  ${S.reorderMode ? '' : `<div class="custom-form-wrap" id="custom-form-wrap">${customSection}</div>`}
+  ${(S.reorderMode || !S.editMode) ? '' : `<div class="custom-form-wrap" id="custom-form-wrap">${customSection}</div>`}
 
-  ${S.reorderMode ? '' : `<div class="new-dir-wrap" id="new-dir-panel">${newDirHtml()}</div>`}
+  ${(S.reorderMode || !S.editMode) ? '' : `<div class="new-dir-wrap" id="new-dir-panel">${newDirHtml()}</div>`}
 
   <div class="checklist-footer">
     <button class="btn btn-ghost" onclick="downloadProject(S.project.id)">↓ Save as JSON</button>
@@ -3678,11 +3788,9 @@ function loadStarterProject(idx) {
   const existing = S.projects.findIndex(x => x.id === p.id);
   if (existing >= 0) S.projects[existing] = p; else S.projects.unshift(p);
   S.project = p;
-  S.form.eventName = p.event || '';
-  S.form.eventLocation = p.location || '';
+  S.form.eventName = p.event ? (p.location ? `${p.event}, ${p.location}` : p.event) : '';
   S.form.topic = p.topic || '';
   S.form.duration = p.duration || 60;
-  S.form.skillLevel = p.skillLevel || 1;
   saveProjects();
   S.prevScreen = 'school';
   goTo('checklist');
@@ -3695,11 +3803,9 @@ function loadChallenge(idx) {
   const existing = S.projects.findIndex(x => x.id === p.id);
   if (existing >= 0) S.projects[existing] = p; else S.projects.unshift(p);
   S.project = p;
-  S.form.eventName = p.event || '';
-  S.form.eventLocation = p.location || '';
+  S.form.eventName = p.event ? (p.location ? `${p.event}, ${p.location}` : p.event) : '';
   S.form.topic = p.topic || '';
   S.form.duration = p.duration || 60;
-  S.form.skillLevel = p.skillLevel || 1;
   saveProjects();
   S.prevScreen = 'school';
   goTo('checklist');
@@ -3713,7 +3819,8 @@ function loadChallenge(idx) {
   loadProjects();
   loadBadges();
   loadLessonsRead();
-  S.screen = 'home';
+  loadProfile();
+  S.screen = profileIsSet() ? 'home' : 'profile';
   render();
 })();
 </script>
