@@ -2128,7 +2128,6 @@ OUTPUT FORMAT: Return ONLY valid compact JSON. No markdown fences. No commentary
 SCRIPT RULES:
   - Target the requested duration (~2.3 spoken words per second). HARD CAP: 60 seconds (~140 words). Never exceed this.
   - Open with a hook: a counter-intuitive observation, a question the audience hasn't asked themselves, or a surprising statement about the topic. NEVER start with "Hey everyone" or introduce yourself.
-  - Use the audience field (if provided) to tune vocabulary and framing.
   - Tone guide: professional = measured, 2–3 incisive observations; excited = high energy, personal story; personal = candid, honest, a moment of real reflection.
   - Structure: 3–5 short paragraphs, each 1–3 sentences. No bullet points. No headings.
   - Avoid: slang, filler phrases ("super excited", "amazing", "awesome"), anything that reads as a TikTok caption.
@@ -2138,7 +2137,7 @@ SCRIPT RULES:
 }
 
 function buildUserMessage(newDir) {
-  const { eventName, topic, duration, role, takeaway, subject, audience, videoMode } = S.form;
+  const { eventName, topic, duration, role, takeaway, subject, videoMode } = S.form;
   const skillLevel = S.profile?.skillLevel || 1;
   const tone       = S.profile?.tone || 'professional';
   const level      = SKILL_LABELS[skillLevel];
@@ -2167,12 +2166,11 @@ Rules: Keep completed shots exactly as-is. Revise unfilmed shots to fit the new 
   }
 
   if (videoMode === 'subject') {
-    const audLine  = audience?.trim() ? `Audience: ${audience.trim()}.` : '';
     const takeLine = takeaway?.trim() ? `Key message: "${takeaway.trim()}".` : '';
     const slug     = (subject || '').trim().replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'') || 'My-Video';
     return `Write a ${duration}-second LinkedIn talking-head script (~${Math.round(duration * 2.3)} words). Hard cap: 60 seconds.
 Topic: "${subject}".
-${audLine} ${takeLine}
+${takeLine}
 Tone: ${tone}. Date: ${date}.
 
 Suggested projectName: "${slug}-${dateSlug}"`;
@@ -2255,7 +2253,6 @@ async function callClaude(newDir) {
           takeaway:   S.form.takeaway,
           tone:       S.profile?.tone || 'professional',
           subject:    S.form.subject,
-          audience:   S.form.audience,
           camera:     S.profile?.camera || '',
           script:     parsed.script,
           shots:      [],
@@ -2406,7 +2403,6 @@ function openProject(id) {
   S.form.topic     = p.topic    || '';
   S.form.duration  = p.duration || 60;
   S.form.subject   = p.subject  || '';
-  S.form.audience  = p.audience || '';
   S.form.videoMode = p.videoMode || (p.subject ? 'subject' : 'event');
   S.customFormOpen = false;
   S.customSectionTarget = null;
@@ -3144,7 +3140,7 @@ function builderSave() {
    SCREEN: NEW PROJECT
 ────────────────────────────────────────── */
 function startNew() {
-  S.form = { videoMode:'event', eventName:'', topic:'', duration:60, projectName:'', nameTouched:false, role:'attendee', takeaway:'', videoType:'experience-coverage', subject:'', audience:'' };
+  S.form = { videoMode:'event', eventName:'', topic:'', duration:60, projectName:'', nameTouched:false, role:'attendee', takeaway:'', videoType:'experience-coverage', subject:'' };
   // Use lens data already in profile (set when user clicked Auto-detect on profile screen).
   // No longer triggers a camera permission prompt for every new video.
   S.lensProfile = S.profile?.lenses || null;
@@ -3294,12 +3290,6 @@ function renderNew() {
       <input type="text" id="f-subject" value="${esc(S.form.subject)}"
              placeholder="e.g. Why async meetings changed how my team works"
              oninput="S.form.subject=this.value;autoName()" autocomplete="off">
-    </div>
-    <div class="form-group">
-      <label>Who is your audience? <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
-      <input type="text" id="f-audience" value="${esc(S.form.audience)}"
-             placeholder="e.g. Marketing leaders, early-career professionals"
-             oninput="S.form.audience=this.value" autocomplete="off">
     </div>
     <div class="form-group">
       <label>The one thing they should remember <span style="color:var(--muted);font-weight:400;text-transform:none;font-size:11px">(optional)</span></label>
