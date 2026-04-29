@@ -881,12 +881,36 @@ input[type=range]::-moz-range-thumb {
 }
 .type-hint.visible { display: block; }
 
-/* ── BUILDER SCREEN ── */
+/* ── BUILDER SCREEN (spreadsheet-style) ── */
 .builder-intro {
   font-size: 13px;
   color: var(--muted);
   line-height: 1.6;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+}
+.builder-tip-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,71,187,0.08);
+  border: 1px solid rgba(0,71,187,0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  line-height: 1.6;
+  flex-wrap: wrap;
+}
+.builder-tip-bar kbd {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
 }
 .builder-section {
   background: var(--surf);
@@ -894,44 +918,161 @@ input[type=range]::-moz-range-thumb {
   border-radius: var(--radius);
   margin-bottom: 12px;
   overflow: hidden;
+  transition: border-color .15s, box-shadow .15s;
+}
+.builder-section.dragging { opacity: 0.4; }
+.builder-section.section-drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0,71,187,0.25);
 }
 .builder-section-hdr {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surf2);
 }
+.builder-section-grip {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 14px;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+.builder-section-grip:hover { color: var(--text); background: var(--surf3); }
+.builder-section-grip:active { cursor: grabbing; }
 .builder-section-name {
   flex: 1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: var(--text);
   min-width: 0;
+  font-family: inherit;
 }
-.builder-section-name:focus { outline: none; }
-.builder-section-body { padding: 8px 14px 12px; }
-.builder-shot-row {
-  display: flex;
+.builder-section-name:hover { background: var(--surf3); }
+.builder-section-name:focus { outline: none; background: var(--surf3); border-color: var(--accent); }
+.builder-section-count {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surf3);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.builder-section-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--surf3);
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.builder-section-del:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
+.builder-section-body { padding: 6px; }
+.builder-row {
+  display: grid;
+  grid-template-columns: 22px 138px 1fr 30px;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s, box-shadow .12s;
+  cursor: default;
 }
-.builder-shot-row:last-child { border-bottom: none; }
-.builder-shot-type { color: var(--accent); font-weight: 700; flex-shrink: 0; font-size: 12px; }
-.builder-shot-title { flex: 1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.builder-shot-del { background: none; border: none; cursor: pointer; color: var(--surf3); font-size: 15px; padding: 4px; border-radius: 4px; transition: color .15s; }
-.builder-shot-del:hover { color: var(--danger); }
-.builder-add-shot-btn { width: 100%; margin-top: 8px; font-size: 13px; }
-.builder-shot-form {
-  margin-top: 10px;
+.builder-row:hover { background: var(--surf2); }
+.builder-row.selected {
+  background: rgba(0,71,187,0.18);
+  border-color: var(--accent);
+}
+.builder-row.dragging { opacity: 0.35; }
+.builder-row.drag-over-before { box-shadow: inset 0 2px 0 var(--accent); }
+.builder-row.drag-over-after  { box-shadow: inset 0 -2px 0 var(--accent); }
+.builder-row-grip {
+  cursor: grab;
+  color: var(--surf3);
+  font-size: 14px;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  line-height: 1;
+  padding: 4px 0;
+  letter-spacing: -2px;
+}
+.builder-row:hover .builder-row-grip { color: var(--muted); }
+.builder-row-grip:active { cursor: grabbing; }
+.builder-row select,
+.builder-row input[type=text] {
   background: var(--surf2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.builder-row select {
+  padding-right: 22px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.builder-row input[type=text]:focus,
+.builder-row select:focus { outline: none; border-color: var(--accent); }
+.builder-row.selected select,
+.builder-row.selected input[type=text] { border-color: rgba(0,71,187,0.45); }
+.builder-row-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--surf3);
+  font-size: 13px;
+  padding: 6px;
+  border-radius: 4px;
+  transition: color .15s, background .15s;
+}
+.builder-row-del:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
+.builder-row-empty {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 12px 8px;
+  font-style: italic;
+}
+.builder-add-row-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+}
+.builder-add-row-btn:hover { color: var(--text); background: var(--surf2); border-color: var(--accent); }
 .builder-actions {
   margin-top: 20px;
   display: flex;
@@ -1757,7 +1898,8 @@ const S = {
   newDirText:       '',
   builderSections:  [],       /* [{name, shots:[]}] for the builder screen */
   builderName:      '',
-  builderAddingTo:  null,     /* section name currently showing add-shot form */
+  builderSelected:  [],       /* array of "si:idx" keys for selected rows */
+  builderClipboard: null,     /* array of shot objects (deep copies) */
   _loadingTimer:    null,
   /* School */
   prevScreen:   'home',
@@ -2963,72 +3105,92 @@ function renderHome() {
 }
 
 /* ──────────────────────────────────────────
-   SCREEN: ADVANCED SHOT BUILDER
+   SCREEN: ADVANCED SHOT BUILDER (spreadsheet-style)
 ────────────────────────────────────────── */
+let _bldDrag = null; // { kind: 'shot', items: [{si, idx}] } | { kind: 'section', si }
+
+function _bldKey(si, idx) { return si + ':' + idx; }
+function _bldIsSelected(si, idx) { return S.builderSelected.includes(_bldKey(si, idx)); }
+function _bldShotDefaults(typeVal) {
+  const t = SHOT_TYPES[typeVal] || SHOT_TYPES['custom'];
+  return {
+    description: t.what,
+    duration: '3-5s',
+    tip: t.what,
+    app: (typeVal === 'hyperlapse' || typeVal === 'timelapse') ? 'Mimo' : null,
+    fps: typeVal === 'slow-mo' ? '60' : null,
+  };
+}
+function _bldNewShot(typeVal = 'static', title = '') {
+  return { id: generateId(), type: typeVal, title, ..._bldShotDefaults(typeVal), completed: false, custom: true };
+}
+
 function startBuilder() {
-  S.builderSections = [{ name: 'Section 1', shots: [] }];
+  S.builderSections = [{ name: 'Section 1', shots: [_bldNewShot('static', '')] }];
   S.builderName     = 'Custom-' + new Date().toISOString().slice(0,10);
-  S.builderAddingTo = null;
+  S.builderSelected = [];
   goTo('builder');
 }
 
 function renderBuilder() {
-  const typeOpts = Object.entries(SHOT_TYPES)
-    .map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join('');
+  const typeOpts = (sel) => Object.entries(SHOT_TYPES)
+    .map(([k, v]) => `<option value="${k}"${k===sel?' selected':''}>${v.icon} ${v.label}</option>`).join('');
 
   const sectionsHtml = S.builderSections.map((sec, si) => {
-    const isFirst = si === 0;
-    const isLast  = si === S.builderSections.length - 1;
     const shotsHtml = sec.shots.map((shot, idx) => {
-      const t = SHOT_TYPES[shot.type] || SHOT_TYPES['custom'];
-      return `<div class="builder-shot-row">
-        <span class="builder-shot-type">${t.icon} ${t.label}</span>
-        <span class="builder-shot-title" title="${esc(shot.title)}">${esc(shot.title)}</span>
-        <div class="sort-btns">
-          ${idx > 0              ? `<button class="sort-btn" onclick="builderMoveShot(${si},${idx},-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
-          ${idx < sec.shots.length-1 ? `<button class="sort-btn" onclick="builderMoveShot(${si},${idx}, 1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
-        </div>
-        <button class="builder-shot-del" title="Remove" onclick="builderDeleteShot(${si},${idx})">✕</button>
+      const sel = _bldIsSelected(si, idx) ? ' selected' : '';
+      return `<div class="builder-row${sel}"
+        data-si="${si}" data-idx="${idx}"
+        draggable="true"
+        ondragstart="builderRowDragStart(event,${si},${idx})"
+        ondragover="builderRowDragOver(event,${si},${idx})"
+        ondragleave="builderRowDragLeave(event)"
+        ondrop="builderRowDrop(event,${si},${idx})"
+        ondragend="builderDragEnd(event)"
+        onclick="builderRowClick(event,${si},${idx})">
+        <span class="builder-row-grip" title="Drag to move (Alt to duplicate)">⋮⋮</span>
+        <select onchange="builderUpdateRow(${si},${idx},'type',this.value)">${typeOpts(shot.type)}</select>
+        <input type="text" value="${esc(shot.title||'')}" placeholder="Shot title…" maxlength="60" autocomplete="off"
+               oninput="builderUpdateRow(${si},${idx},'title',this.value)"
+               onkeydown="builderRowKeydown(event,${si},${idx})">
+        <button class="builder-row-del" title="Delete row"
+                onclick="event.stopPropagation();builderDeleteShot(${si},${idx})">✕</button>
       </div>`;
     }).join('');
 
-    const addFormHtml = S.builderAddingTo === si
-      ? `<div class="builder-shot-form">
-          <div class="form-group" style="margin-bottom:8px">
-            <select id="bld-type-${si}">${typeOpts}</select>
-            <div class="type-hint" id="bld-hint-${si}"></div>
-          </div>
-          <div class="form-group" style="margin-bottom:8px">
-            <input type="text" id="bld-title-${si}" placeholder="Shot title…" maxlength="60" autocomplete="off">
-          </div>
-          <div class="form-row">
-            <button class="btn btn-primary btn-sm" onclick="builderAddShot(${si})">Add Shot</button>
-            <button class="btn btn-ghost btn-sm" onclick="S.builderAddingTo=null;render()">Cancel</button>
-          </div>
-         </div>`
-      : `<button class="btn btn-ghost builder-add-shot-btn" onclick="S.builderAddingTo=${si};render()">＋ Add Shot</button>`;
+    const empty = sec.shots.length === 0
+      ? `<div class="builder-row-empty">Empty section — drag rows here or click below to add.</div>`
+      : '';
 
-    return `<div class="builder-section">
-      <div class="builder-section-hdr">
-        <span class="builder-section-name" contenteditable="true" role="textbox"
-              onblur="builderRenameSection(${si},this.textContent.trim())"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
-              >${esc(sec.name)}</span>
-        <div class="sort-btns">
-          ${!isFirst ? `<button class="sort-btn" onclick="builderMoveSection(${si},-1)">▲</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▲</span>'}
-          ${!isLast  ? `<button class="sort-btn" onclick="builderMoveSection(${si}, 1)">▼</button>` : '<span class="sort-btn" style="opacity:0;pointer-events:none">▼</span>'}
-        </div>
-        <button class="builder-shot-del" title="Delete section" onclick="builderDeleteSection(${si})">✕</button>
+    return `<div class="builder-section" data-section-si="${si}"
+      ondragover="builderSectionDragOver(event,${si})"
+      ondrop="builderSectionDrop(event,${si})"
+      ondragleave="builderSectionDragLeave(event)">
+      <div class="builder-section-hdr"
+           draggable="true"
+           ondragstart="builderSectionDragStart(event,${si})"
+           ondragend="builderDragEnd(event)">
+        <span class="builder-section-grip" title="Drag section">⋮⋮</span>
+        <input type="text" class="builder-section-name" value="${esc(sec.name)}"
+               oninput="builderRenameSection(${si},this.value)" maxlength="40"
+               onmousedown="event.stopPropagation()">
+        <span class="builder-section-count">${sec.shots.length}</span>
+        <button class="builder-section-del" title="Delete section"
+                onclick="builderDeleteSection(${si})">🗑</button>
       </div>
       <div class="builder-section-body">
-        ${shotsHtml || `<p style="color:var(--muted);font-size:13px;padding:4px 0 8px">No shots yet — add one below.</p>`}
-        ${addFormHtml}
+        ${empty}${shotsHtml}
+        <button class="builder-add-row-btn" onclick="builderAddRow(${si})">＋ New row</button>
       </div>
     </div>`;
   }).join('');
 
   return `<div class="screen-title">Advanced Shot Builder</div>
-  <p class="builder-intro">Build your shot list manually — section by section, shot by shot. Great for custom shoots where you already know exactly what you want to capture.</p>
+  <p class="builder-intro">Spreadsheet-style: add rows, edit inline, drag to reorder. Build a custom shot list fast.</p>
+
+  <div class="builder-tip-bar">
+    <span><kbd>Click</kbd> select · <kbd>Shift</kbd>/<kbd>Ctrl</kbd>+click multi · <kbd>Drag</kbd> move · <kbd>Alt</kbd>+drag duplicate · <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>V</kbd>/<kbd>D</kbd> · <kbd>Del</kbd></span>
+  </div>
 
   <div class="form-group">
     <label>Project Name</label>
@@ -3045,58 +3207,291 @@ function renderBuilder() {
   </div>`;
 }
 
+/* ── Section operations ── */
 function builderRenameSection(si, name) {
-  if (name && S.builderSections[si]) S.builderSections[si].name = name;
+  if (S.builderSections[si]) S.builderSections[si].name = name;
 }
-
-function builderDeleteSection(si) {
-  if (S.builderSections.length === 1) { showBanner('You need at least one section.', 'danger'); return; }
-  S.builderSections.splice(si, 1);
-  if (S.builderAddingTo === si) S.builderAddingTo = null;
-  render();
-}
-
 function builderAddSection() {
-  S.builderSections.push({ name: 'New Section', shots: [] });
+  S.builderSections.push({ name: 'New Section', shots: [_bldNewShot('static', '')] });
+  S.builderSelected = [];
+  render();
+}
+function builderDeleteSection(si) {
+  if (S.builderSections.length === 1) {
+    showBanner('You need at least one section.', 'danger');
+    return;
+  }
+  S.builderSections.splice(si, 1);
+  S.builderSelected = [];
   render();
 }
 
-function builderMoveSection(si, dir) {
-  const swap = si + dir;
-  if (swap < 0 || swap >= S.builderSections.length) return;
-  [S.builderSections[si], S.builderSections[swap]] = [S.builderSections[swap], S.builderSections[si]];
-  render();
-}
-
-function builderAddShot(si) {
-  const typeEl  = document.getElementById(`bld-type-${si}`);
-  const titleEl = document.getElementById(`bld-title-${si}`);
-  const title   = titleEl?.value.trim();
-  const typeVal = typeEl?.value || 'custom';
-  if (!title) { titleEl?.focus(); return; }
-  const t = SHOT_TYPES[typeVal] || SHOT_TYPES['custom'];
-  S.builderSections[si].shots.push({
-    id: generateId(), type: typeVal, title,
-    description: t.what, duration: '3-5s', tip: t.what,
-    app:  (typeVal === 'hyperlapse' || typeVal === 'timelapse') ? 'Mimo' : null,
-    fps:  typeVal === 'slow-mo' ? '60' : null,
-    completed: false, custom: true,
-  });
-  S.builderAddingTo = null;
-  render();
-}
-
-function builderMoveShot(si, idx, dir) {
+/* ── Row operations ── */
+function builderAddRow(si, atIdx) {
   const shots = S.builderSections[si].shots;
-  const swap  = idx + dir;
-  if (swap < 0 || swap >= shots.length) return;
-  [shots[idx], shots[swap]] = [shots[swap], shots[idx]];
+  const idx = (atIdx == null) ? shots.length : Math.max(0, Math.min(atIdx, shots.length));
+  shots.splice(idx, 0, _bldNewShot('static', ''));
+  S.builderSelected = [];
   render();
+  requestAnimationFrame(() => {
+    const row = document.querySelector(`.builder-row[data-si="${si}"][data-idx="${idx}"]`);
+    row?.querySelector('input[type=text]')?.focus();
+  });
 }
-
+function builderUpdateRow(si, idx, field, value) {
+  const shot = S.builderSections[si]?.shots[idx];
+  if (!shot) return;
+  shot[field] = value;
+  if (field === 'type') Object.assign(shot, _bldShotDefaults(value));
+}
 function builderDeleteShot(si, idx) {
   S.builderSections[si].shots.splice(idx, 1);
+  S.builderSelected = [];
   render();
+}
+function builderRowKeydown(e, si, idx) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    builderAddRow(si, idx + 1);
+  }
+}
+
+/* ── Selection ── */
+function builderRowClick(e, si, idx) {
+  const k = _bldKey(si, idx);
+  if (e.shiftKey && S.builderSelected.length) {
+    const last = S.builderSelected[S.builderSelected.length - 1];
+    const [lsi, lidx] = last.split(':').map(Number);
+    if (lsi === si) {
+      const lo = Math.min(lidx, idx), hi = Math.max(lidx, idx);
+      const range = [];
+      for (let i = lo; i <= hi; i++) range.push(_bldKey(si, i));
+      S.builderSelected = range;
+    } else {
+      S.builderSelected = [k];
+    }
+  } else if (e.ctrlKey || e.metaKey) {
+    S.builderSelected = S.builderSelected.includes(k)
+      ? S.builderSelected.filter(x => x !== k)
+      : [...S.builderSelected, k];
+  } else {
+    S.builderSelected = [k];
+  }
+  _bldUpdateSelectionVisuals();
+}
+function _bldUpdateSelectionVisuals() {
+  document.querySelectorAll('.builder-row[data-si]').forEach(el => {
+    const k = el.dataset.si + ':' + el.dataset.idx;
+    el.classList.toggle('selected', S.builderSelected.includes(k));
+  });
+}
+
+/* ── Clipboard / delete / duplicate ── */
+function _bldGetSelectedShots() {
+  return S.builderSelected
+    .map(k => k.split(':').map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    .map(([si, idx]) => ({ si, idx, shot: S.builderSections[si]?.shots[idx] }))
+    .filter(x => x.shot);
+}
+function builderCopySelection() {
+  const picked = _bldGetSelectedShots();
+  if (!picked.length) return;
+  S.builderClipboard = picked.map(({ shot }) => JSON.parse(JSON.stringify(shot)));
+  showBanner(`Copied ${picked.length} shot${picked.length>1?'s':''}.`, 'info', 1200);
+}
+function builderPasteClipboard() {
+  if (!S.builderClipboard || !S.builderClipboard.length) return;
+  let targetSi, targetIdx;
+  if (S.builderSelected.length) {
+    const last = S.builderSelected[S.builderSelected.length - 1];
+    [targetSi, targetIdx] = last.split(':').map(Number);
+    targetIdx += 1;
+  } else {
+    targetSi = S.builderSections.length - 1;
+    targetIdx = S.builderSections[targetSi].shots.length;
+  }
+  const copies = S.builderClipboard.map(s => ({ ...JSON.parse(JSON.stringify(s)), id: generateId() }));
+  S.builderSections[targetSi].shots.splice(targetIdx, 0, ...copies);
+  S.builderSelected = copies.map((_, i) => _bldKey(targetSi, targetIdx + i));
+  render();
+  showBanner(`Pasted ${copies.length} shot${copies.length>1?'s':''}.`, 'info', 1200);
+}
+function builderDeleteSelection() {
+  if (!S.builderSelected.length) return;
+  const picked = _bldGetSelectedShots();
+  const bySec = {};
+  for (const { si, idx } of picked) (bySec[si] = bySec[si] || []).push(idx);
+  for (const si of Object.keys(bySec)) {
+    bySec[si].sort((a, b) => b - a).forEach(idx => S.builderSections[si].shots.splice(idx, 1));
+  }
+  S.builderSelected = [];
+  render();
+}
+function builderDuplicateSelection() {
+  if (!S.builderSelected.length) return;
+  const picked = _bldGetSelectedShots();
+  for (let i = picked.length - 1; i >= 0; i--) {
+    const { si, idx, shot } = picked[i];
+    const copy = { ...JSON.parse(JSON.stringify(shot)), id: generateId() };
+    S.builderSections[si].shots.splice(idx + 1, 0, copy);
+  }
+  S.builderSelected = [];
+  render();
+}
+
+/* ── Drag & drop: rows ── */
+function builderRowDragStart(e, si, idx) {
+  e.stopPropagation();
+  const k = _bldKey(si, idx);
+  let items;
+  if (S.builderSelected.includes(k) && S.builderSelected.length > 1) {
+    items = _bldGetSelectedShots().map(x => ({ si: x.si, idx: x.idx }));
+  } else {
+    items = [{ si, idx }];
+    S.builderSelected = [k];
+    _bldUpdateSelectionVisuals();
+  }
+  _bldDrag = { kind: 'shot', items };
+  try { e.dataTransfer.setData('text/plain', 'row'); } catch {}
+  e.dataTransfer.effectAllowed = 'copyMove';
+  e.currentTarget.classList.add('dragging');
+}
+function builderRowDragOver(e, si, idx) {
+  if (!_bldDrag || _bldDrag.kind !== 'shot') return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+  const r = e.currentTarget.getBoundingClientRect();
+  const before = (e.clientY - r.top) < r.height / 2;
+  document.querySelectorAll('.builder-row.drag-over-before, .builder-row.drag-over-after')
+    .forEach(el => el.classList.remove('drag-over-before','drag-over-after'));
+  e.currentTarget.classList.add(before ? 'drag-over-before' : 'drag-over-after');
+}
+function builderRowDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over-before','drag-over-after');
+}
+function builderRowDrop(e, si, idx) {
+  if (!_bldDrag || _bldDrag.kind !== 'shot') return;
+  e.preventDefault();
+  e.stopPropagation();
+  const r = e.currentTarget.getBoundingClientRect();
+  const before = (e.clientY - r.top) < r.height / 2;
+  _bldPerformShotDrop(si, before ? idx : idx + 1, e.altKey);
+}
+
+/* ── Drag & drop: section body (catches drops in empty/below-rows area) ── */
+function builderSectionDragOver(e, si) {
+  if (!_bldDrag) return;
+  if (_bldDrag.kind === 'shot') {
+    if (e.target.closest('.builder-row[data-si]')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+  } else if (_bldDrag.kind === 'section') {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.builder-section.section-drag-over')
+      .forEach(el => el.classList.remove('section-drag-over'));
+    e.currentTarget.classList.add('section-drag-over');
+  }
+}
+function builderSectionDragLeave(e) {
+  if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('section-drag-over');
+  }
+}
+function builderSectionDrop(e, si) {
+  if (!_bldDrag) return;
+  if (_bldDrag.kind === 'shot') {
+    if (e.target.closest('.builder-row[data-si]')) return;
+    e.preventDefault();
+    _bldPerformShotDrop(si, S.builderSections[si].shots.length, e.altKey);
+  } else if (_bldDrag.kind === 'section') {
+    e.preventDefault();
+    const fromSi = _bldDrag.si;
+    if (fromSi === si) { _bldDrag = null; builderDragEnd(e); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    const before = (e.clientY - r.top) < r.height / 2;
+    const targetIdx = before ? si : si + 1;
+    const item = S.builderSections.splice(fromSi, 1)[0];
+    const adj = fromSi < targetIdx ? targetIdx - 1 : targetIdx;
+    S.builderSections.splice(adj, 0, item);
+    _bldDrag = null;
+    S.builderSelected = [];
+    render();
+  }
+}
+
+function _bldPerformShotDrop(targetSi, rawTargetIdx, isAlt) {
+  if (!_bldDrag || _bldDrag.kind !== 'shot') return;
+  const sorted = _bldDrag.items.slice().sort((a, b) => a.si - b.si || a.idx - b.idx);
+  const shots  = sorted.map(({ si, idx }) => S.builderSections[si].shots[idx]).filter(Boolean);
+
+  if (isAlt) {
+    const copies = shots.map(s => ({ ...JSON.parse(JSON.stringify(s)), id: generateId() }));
+    S.builderSections[targetSi].shots.splice(rawTargetIdx, 0, ...copies);
+  } else {
+    const removalsBefore = sorted.filter(it => it.si === targetSi && it.idx < rawTargetIdx).length;
+    sorted.slice().sort((a, b) => b.si - a.si || b.idx - a.idx)
+      .forEach(({ si, idx }) => S.builderSections[si].shots.splice(idx, 1));
+    S.builderSections[targetSi].shots.splice(rawTargetIdx - removalsBefore, 0, ...shots);
+  }
+
+  _bldDrag = null;
+  S.builderSelected = [];
+  render();
+}
+
+/* ── Drag & drop: sections ── */
+function builderSectionDragStart(e, si) {
+  // Don't fire if user is dragging from inside the name input
+  if (e.target.closest('.builder-section-name, .builder-section-del')) {
+    e.preventDefault();
+    return;
+  }
+  e.stopPropagation();
+  _bldDrag = { kind: 'section', si };
+  try { e.dataTransfer.setData('text/plain', 'section'); } catch {}
+  e.dataTransfer.effectAllowed = 'move';
+  const sec = e.currentTarget.closest('.builder-section');
+  if (sec) sec.classList.add('dragging');
+}
+
+function builderDragEnd(_e) {
+  document.querySelectorAll('.dragging, .drag-over-before, .drag-over-after, .section-drag-over')
+    .forEach(el => el.classList.remove('dragging','drag-over-before','drag-over-after','section-drag-over'));
+  _bldDrag = null;
+}
+
+/* ── Keyboard shortcuts (registered globally; only acts on builder screen) ── */
+function builderHandleKeydown(e) {
+  if (S.screen !== 'builder') return;
+  const t = e.target;
+  const inField = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+  const meta = e.ctrlKey || e.metaKey;
+
+  if (!inField && (e.key === 'Delete' || e.key === 'Backspace')) {
+    if (S.builderSelected.length) { e.preventDefault(); builderDeleteSelection(); }
+    return;
+  }
+  if (e.key === 'Escape' && S.builderSelected.length) {
+    S.builderSelected = []; _bldUpdateSelectionVisuals();
+    return;
+  }
+  if (meta && !inField) {
+    const k = e.key.toLowerCase();
+    if (k === 'c') { e.preventDefault(); builderCopySelection(); return; }
+    if (k === 'v') { e.preventDefault(); builderPasteClipboard(); return; }
+    if (k === 'd') { e.preventDefault(); builderDuplicateSelection(); return; }
+    if (k === 'a') {
+      e.preventDefault();
+      const all = [];
+      S.builderSections.forEach((sec, si) => sec.shots.forEach((_, idx) => all.push(_bldKey(si, idx))));
+      S.builderSelected = all;
+      _bldUpdateSelectionVisuals();
+      return;
+    }
+  }
 }
 
 function builderSave() {
@@ -3108,11 +3503,12 @@ function builderSave() {
   for (const sec of S.builderSections) {
     if (!sections.includes(sec.name)) sections.push(sec.name);
     for (const s of sec.shots) {
+      if (!s.title || !s.title.trim()) continue;
       allShots.push({ ...s, section: sec.name });
     }
   }
 
-  if (!allShots.length) { showBanner('Add at least one shot before saving.', 'danger'); return; }
+  if (!allShots.length) { showBanner('Add at least one shot with a title before saving.', 'danger'); return; }
 
   const project = {
     id:        generateId(),
@@ -3807,6 +4203,7 @@ function loadChallenge(idx) {
   loadBadges();
   loadLessonsRead();
   loadProfile();
+  document.addEventListener('keydown', builderHandleKeydown);
   S.screen = profileIsSet() ? 'home' : 'profile';
   render();
 })();
