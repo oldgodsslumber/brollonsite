@@ -246,7 +246,7 @@
     .preview-wrap video {
       position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
     }
-    #broll-overlay { opacity: 0; transition: opacity .08s; }
+    #broll-overlay { visibility: hidden; }
 
     /* ── Trim panel ── */
     .clip-panel {
@@ -422,8 +422,8 @@
 
       <!-- Preview -->
       <div class="preview-wrap">
-        <video id="aroll-preview" playsinline preload="metadata"></video>
-        <video id="broll-overlay" playsinline muted preload="auto"></video>
+        <video id="aroll-preview" playsinline webkit-playsinline preload="metadata"></video>
+        <video id="broll-overlay" playsinline webkit-playsinline muted preload="auto"></video>
       </div>
 
       <p class="tip-inline">
@@ -992,9 +992,11 @@ window.deleteClip = () => {
 const aVid = document.getElementById('aroll-preview');
 const bVid = document.getElementById('broll-overlay');
 
+// timeupdate keeps the time-display fresh while paused or for occasional safety,
+// but cutaway swap & playhead are driven by the rAF loop below for low latency.
 aVid.addEventListener('timeupdate', () => {
+  if (E.playing) return; // rAF loop owns updates during playback
   const t = aVid.currentTime;
-  syncOverlay(t);
   updatePlayheadPos(t);
   const dur = E.aroll ? E.aroll.duration : 0;
   document.getElementById('time-display').textContent = `${fmtDur(t)} / ${fmtDur(dur)}`;
@@ -1003,30 +1005,41 @@ aVid.addEventListener('timeupdate', () => {
 
 aVid.addEventListener('ended', () => {
   E.playing = false;
+  cancelAnimationFrame(_playLoopId);
   document.getElementById('play-btn').textContent = '▶ Play';
   bVid.pause();
-  bVid.style.opacity = '0';
+  bVid.style.visibility = 'hidden';
 });
 
-function syncOverlay(t) {
-  // Sort clips chronologically and use a small tolerance so adjacent clips
-  // don't cause a brief flash of A-roll during the transition.
+// activeCutawayAt: which placed clip (if any) covers t? Uses chronological sort
+// with a small epsilon so back-to-back clips don't flash a frame of A-roll.
+function activeCutawayAt(t) {
   const EPSILON = 0.1;
   const sorted = [...E.clips].sort((a, b) => a.trackStart - b.trackStart);
-  // When two clips overlap via EPSILON (adjacent clips), prefer the one
-  // whose actual range contains t; if neither does, prefer the later clip.
   let match = null;
   for (const c of sorted) {
     const end = c.trackStart + clipTimelineDur(c);
     if (t >= c.trackStart - EPSILON && t < end + EPSILON) {
-      if (t >= c.trackStart && t < end) { match = c; break; } // exact hit
-      match = c; // EPSILON hit — keep scanning, latest wins
+      if (t >= c.trackStart && t < end) { match = c; break; }
+      match = c;
     }
   }
+  return match;
+}
+
+function nextCutawayAfter(t) {
+  let best = null;
+  for (const c of E.clips) {
+    if (c.trackStart > t && (!best || c.trackStart < best.trackStart)) best = c;
+  }
+  return best;
+}
+
+function syncOverlay(t) {
+  const match = activeCutawayAt(t);
   if (match) {
     const bclip = E.broll[match.brollIdx];
     const ratio = bclip?.speedRatio || 1;
-    // Map timeline time → native B-roll time (adjusted by FPS ratio)
     const rawTime = match.inPoint + (t - match.trackStart) * ratio;
     const bTime = Math.max(match.inPoint, Math.min(match.outPoint - 0.01, rawTime));
     if (bVid.dataset.src !== bclip.url) {
@@ -1037,22 +1050,70 @@ function syncOverlay(t) {
     bVid.playbackRate = ratio;
     if (Math.abs(bVid.currentTime - bTime) > 0.35) bVid.currentTime = bTime;
     if (E.playing && bVid.paused) bVid.play().catch(() => {});
-    bVid.style.opacity = '1';
+    bVid.style.visibility = 'visible';
   } else {
-    bVid.pause();
-    bVid.style.opacity = '0';
+    if (!bVid.paused) bVid.pause();
+    bVid.style.visibility = 'hidden';
+    // Preload the next cutaway's B-roll a couple seconds before it hits,
+    // so the first frame is decoded by the time we reveal it.
+    const upcoming = nextCutawayAfter(t);
+    if (upcoming && upcoming.trackStart - t < 2) {
+      const bclip = E.broll[upcoming.brollIdx];
+      if (bclip && bVid.dataset.src !== bclip.url) {
+        bVid.dataset.src = bclip.url;
+        bVid.src = bclip.url;
+      }
+    }
   }
+}
+
+let _playLoopId = 0;
+function playLoop() {
+  if (!E.playing) return;
+  const t = aVid.currentTime;
+  syncOverlay(t);
+  updatePlayheadPos(t);
+  const dur = E.aroll ? E.aroll.duration : 0;
+  document.getElementById('time-display').textContent = `${fmtDur(t)} / ${fmtDur(dur)}`;
+  document.getElementById('scrubber').value = t;
+  _playLoopId = requestAnimationFrame(playLoop);
+}
+
+// Mobile autoplay: B-roll <video> must be played-then-paused INSIDE the
+// initial user gesture, or future play() calls (driven by rAF, not a tap)
+// will silently reject on iOS Safari and the cutaway won't render.
+let _bvPrimed = false;
+function primeBVid() {
+  if (_bvPrimed) return;
+  // Seed src so play() has something to chew on. Prefer the first upcoming
+  // cutaway's clip; fall back to any loaded B-roll.
+  const firstClip = E.clips.length
+    ? [...E.clips].sort((a, b) => a.trackStart - b.trackStart)[0]
+    : null;
+  const bclip = firstClip ? E.broll[firstClip.brollIdx] : E.broll[0];
+  if (bclip && bVid.dataset.src !== bclip.url) {
+    bVid.dataset.src = bclip.url;
+    bVid.src = bclip.url;
+  }
+  // Synchronously initiate play in the gesture, then immediately pause.
+  // .catch swallows the "no src" / "interrupted" cases harmlessly.
+  bVid.play().then(() => bVid.pause()).catch(() => {});
+  _bvPrimed = true;
 }
 
 window.togglePlay = () => {
   if (!E.aroll) return;
   E.playing = !E.playing;
   if (E.playing) {
-    aVid.play();
+    aVid.play().catch(() => {});
+    primeBVid();
+    cancelAnimationFrame(_playLoopId);
+    _playLoopId = requestAnimationFrame(playLoop);
     document.getElementById('play-btn').textContent = '⏸ Pause';
   } else {
     aVid.pause(); bVid.pause();
-    bVid.style.opacity = '0';
+    bVid.style.visibility = 'hidden';
+    cancelAnimationFrame(_playLoopId);
     document.getElementById('play-btn').textContent = '▶ Play';
   }
 };
@@ -1332,22 +1393,27 @@ window.startExport = async () => {
     if (!videoConfig) throw new Error(`No supported H.264 profile found (dimensions: ${W}×${H}). Try a different browser.`);
 
     // ── Find a supported AAC config ───────────────────────
-    // Probe the browser's native audio sample rate first (Safari ignores requested rates)
-    const _probeCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const NATIVE_RATE = _probeCtx.sampleRate;
-    await _probeCtx.close();
-
+    // Open the capture AudioContext NOW so the encoder is configured against
+    // the rate the context will actually deliver. Probing with a throwaway
+    // context and then opening a second one is unreliable on Safari, which
+    // can hand back a different sampleRate per context.
     const N_CH = 2;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const CAPTURE_RATE = audioCtx.sampleRate;
+
+    // Encoder MUST be configured at CAPTURE_RATE — AudioData we feed in will
+    // be tagged with audioCtx.sampleRate, and a mismatch produces wrong-pitch
+    // / wrong-duration audio in the muxed file.
     let audioConfig = null;
-    for (const sampleRate of [NATIVE_RATE, 48000, 44100]) {
-      const cfg = { codec: 'mp4a.40.2', numberOfChannels: N_CH, sampleRate, bitrate: 128_000 };
-      try {
-        const { supported } = await AudioEncoder.isConfigSupported(cfg);
-        if (supported) { audioConfig = cfg; break; }
-      } catch {}
-    }
+    try {
+      const cfg = { codec: 'mp4a.40.2', numberOfChannels: N_CH, sampleRate: CAPTURE_RATE, bitrate: 128_000 };
+      const { supported } = await AudioEncoder.isConfigSupported(cfg);
+      if (supported) audioConfig = cfg;
+    } catch {}
     if (!audioConfig) {
-      throw new Error('AAC audio encoding not supported in this browser. Please update Safari or use Chrome / Firefox.');
+      await audioCtx.close().catch(() => {});
+      throw new Error(`AAC encoding at ${CAPTURE_RATE}Hz not supported here. Please update Safari or use Chrome / Firefox.`);
     }
     const SAMPLE_RATE = audioConfig.sampleRate;
 
@@ -1390,8 +1456,7 @@ window.startExport = async () => {
       audioVid.addEventListener('loadeddata', resolve, { once: true });
     });
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    // audioCtx was opened earlier so the encoder could match its sampleRate.
     const captureSrc = audioCtx.createMediaElementSource(audioVid);
     const captureProc = audioCtx.createScriptProcessor(4096, N_CH, N_CH);
     captureSrc.connect(captureProc);
