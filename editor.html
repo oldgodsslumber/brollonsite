@@ -1923,12 +1923,72 @@ window.startExport = async () => {
   }
 };
 
+// ── SLIDER POINTER-DRAG FALLBACK ─────────────────────────
+// iOS Safari is flaky about translating touchmove on <input type=range>
+// into input events even with touch-action set. This drives the value
+// directly from pointer position so finger drags reliably work.
+function attachSliderDrag(slider) {
+  if (!slider) return;
+  let dragging = false;
+  const valueFromX = clientX => {
+    const rect = slider.getBoundingClientRect();
+    if (rect.width <= 0) return parseFloat(slider.value) || 0;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const min = parseFloat(slider.min) || 0;
+    const max = parseFloat(slider.max) || 100;
+    const step = parseFloat(slider.step) || 0;
+    let v = min + ratio * (max - min);
+    if (step > 0) v = Math.round(v / step) * step;
+    return Math.max(min, Math.min(max, v));
+  };
+  const update = clientX => {
+    const v = valueFromX(clientX);
+    if (String(v) === slider.value) return;
+    slider.value = v;
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  slider.addEventListener('pointerdown', e => {
+    // Native mouse drag on desktop works fine; only intercept touch+pen,
+    // which is where iOS Safari's range-input handling falls down.
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+    if (parseFloat(slider.max) <= 0) return; // nothing to scrub yet
+    dragging = true;
+    try { slider.setPointerCapture(e.pointerId); } catch {}
+    update(e.clientX);
+    e.preventDefault();
+  });
+  slider.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    update(e.clientX);
+    e.preventDefault();
+  });
+  const stop = e => {
+    if (!dragging) return;
+    dragging = false;
+    try { slider.releasePointerCapture(e.pointerId); } catch {}
+  };
+  slider.addEventListener('pointerup', stop);
+  slider.addEventListener('pointercancel', stop);
+}
+
 // ── INIT ─────────────────────────────────────────────────
 (async () => {
   detectExportCapability();
+  attachSliderDrag(document.getElementById('scrubber'));
+  attachSliderDrag(document.getElementById('cp-in-slider'));
+  attachSliderDrag(document.getElementById('cp-out-slider'));
   await restoreFromIdb();
   updateExportBtn();
 })();
+
+// Re-attach drag to trim sliders whenever the trim card re-renders.
+// (The trim card uses innerHTML so the slider elements are replaced.)
+const _origRenderTrimCard = renderTrimCard;
+renderTrimCard = function() {
+  _origRenderTrimCard();
+  attachSliderDrag(document.getElementById('trim-in-slider'));
+  attachSliderDrag(document.getElementById('trim-out-slider'));
+};
 </script>
 </body>
 </html>
