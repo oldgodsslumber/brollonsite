@@ -208,16 +208,25 @@
       display: flex; align-items: center; gap: 10px; margin-top: 10px;
     }
     .time-display { font-size: 12px; font-weight: 600; color: var(--muted); min-width: 88px; }
-    .scrubber-wrap { padding: 4px 0 8px; }
     input[type=range].scrubber {
       width: 100%; height: 8px; -webkit-appearance: none; appearance: none;
       background: var(--border); border-radius: 4px; cursor: pointer; outline: none;
+      /* iOS Safari: without pan-y here, horizontal touches get hijacked by
+         the page's scroll heuristic and the slider thumb refuses to drag. */
+      touch-action: pan-y;
     }
     input[type=range].scrubber::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 20px; height: 20px;
+      -webkit-appearance: none; width: 28px; height: 28px;
       border-radius: 50%; background: var(--accent); cursor: pointer;
       box-shadow: 0 0 0 4px rgba(0,71,187,0.22);
     }
+    input[type=range].scrubber::-moz-range-thumb {
+      width: 28px; height: 28px; border: none;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+      box-shadow: 0 0 0 4px rgba(0,71,187,0.22);
+    }
+    /* Larger hit area so finger drags reliably grab the thumb. */
+    .scrubber-wrap { padding: 12px 0 16px; }
     /* ── Trim B-Roll Card ── */
     .trim-card-inner { display: flex; flex-direction: column; gap: 12px; }
     .trim-nav { display: flex; align-items: center; gap: 10px; }
@@ -229,9 +238,14 @@
     input[type=range].trim-slider {
       width: 100%; height: 6px; -webkit-appearance: none; appearance: none;
       background: var(--border); border-radius: 3px; cursor: pointer; outline: none;
+      touch-action: pan-y;
     }
     input[type=range].trim-slider::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 18px; height: 18px;
+      -webkit-appearance: none; width: 24px; height: 24px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+    }
+    input[type=range].trim-slider::-moz-range-thumb {
+      width: 24px; height: 24px; border: none;
       border-radius: 50%; background: var(--accent); cursor: pointer;
     }
     .trim-summary { font-size: 12px; color: var(--muted); text-align: center; }
