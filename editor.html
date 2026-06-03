@@ -316,6 +316,7 @@
     Drag b-roll clips onto the timeline to place them, trim if needed, then export a composited MP4.
     Everything runs in your browser — no uploads, no accounts.
   </div>
+  <div id="debug-strip" style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--warn);background:rgba(245,166,35,0.08);border:1px dashed var(--warn);padding:6px 10px;border-radius:6px;margin-bottom:12px;word-break:break-all">debug idle</div>
 
   <!-- ────────────────────────────────────────────
        CARD 1 — Upload
@@ -865,6 +866,17 @@ async function restoreFromIdb() {
         vid.src = url; vid.load();
         const previewWrap = document.querySelector('.preview-wrap');
         if (previewWrap) previewWrap.style.aspectRatio = `${E.aroll.width} / ${E.aroll.height}`;
+        // Same fallback as loadAroll, for restored projects whose saved
+        // duration may have been 0 from a broken initial probe.
+        vid.addEventListener('loadedmetadata', () => {
+          if (!E.aroll) return;
+          if ((!E.aroll.duration || E.aroll.duration <= 0) && vid.duration > 0) {
+            E.aroll.duration = vid.duration;
+            initTimeline();
+            autoSave();
+          }
+          _renderDebug();
+        }, { once: true });
       }
     }
 
@@ -962,6 +974,23 @@ window.loadAroll = async file => {
   renderClips();
   updateExportBtn();
   autoSave();
+
+  // Fallback: if probeClip returned duration: 0 (its 5s safety timer fired,
+  // or loadeddata didn't reach the hidden probe element), take the duration
+  // from the real preview video once its metadata loads. Without this the
+  // scrubber's max stays 0 and the slider is unusable.
+  vid.addEventListener('loadedmetadata', () => {
+    if (!E.aroll) return;
+    if ((!E.aroll.duration || E.aroll.duration <= 0) && vid.duration > 0) {
+      E.aroll.duration = vid.duration;
+      E.aroll.width    = vid.videoWidth  || E.aroll.width;
+      E.aroll.height   = vid.videoHeight || E.aroll.height;
+      initTimeline();
+      autoSave();
+    }
+    _renderDebug();
+  }, { once: true });
+  _renderDebug();
 };
 
 window.loadBroll = async files => {
@@ -1923,71 +1952,105 @@ window.startExport = async () => {
   }
 };
 
-// ── SLIDER POINTER-DRAG FALLBACK ─────────────────────────
-// iOS Safari is flaky about translating touchmove on <input type=range>
-// into input events even with touch-action set. This drives the value
-// directly from pointer position so finger drags reliably work.
-function attachSliderDrag(slider) {
-  if (!slider) return;
-  let dragging = false;
-  const valueFromX = clientX => {
-    const rect = slider.getBoundingClientRect();
-    if (rect.width <= 0) return parseFloat(slider.value) || 0;
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const min = parseFloat(slider.min) || 0;
-    const max = parseFloat(slider.max) || 100;
-    const step = parseFloat(slider.step) || 0;
-    let v = min + ratio * (max - min);
-    if (step > 0) v = Math.round(v / step) * step;
-    return Math.max(min, Math.min(max, v));
-  };
-  const update = clientX => {
-    const v = valueFromX(clientX);
-    if (String(v) === slider.value) return;
-    slider.value = v;
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
-  };
-  // Touch events. iOS Safari ignores pointer events on range inputs
-  // (and even when they fire, native range handling beats preventDefault),
-  // so this is the path that actually works on iPhone. passive: false is
-  // required for preventDefault to stop the native slider behavior.
-  slider.addEventListener('touchstart', e => {
-    if (parseFloat(slider.max) <= 0) return;
-    dragging = true;
-    update(e.touches[0].clientX);
-    e.preventDefault();
-  }, { passive: false });
-  slider.addEventListener('touchmove', e => {
-    if (!dragging) return;
-    update(e.touches[0].clientX);
-    e.preventDefault();
-  }, { passive: false });
-  const endTouch = () => { dragging = false; };
-  slider.addEventListener('touchend', endTouch);
-  slider.addEventListener('touchcancel', endTouch);
+// ── SLIDER TOUCH-DRAG (iOS-proof) ────────────────────────
+// iOS Safari's native range-input touch handling runs in capture phase
+// and is virtually impossible to override on the input itself. Strategy:
+//   1. Listen in CAPTURE phase on the slider for touchstart so we fire
+//      before any native bubble-phase handler.
+//   2. Delegate touchmove + touchend to DOCUMENT (also capture phase)
+//      so iOS can't reroute events away from us mid-drag — once a finger
+//      lands on the slider, every move anywhere goes through us.
+//   3. passive: false everywhere so preventDefault actually sticks.
+let _activeSliderDrag = null;
+let _debugTouchInfo = 'idle';
 
-  // Desktop: keep native mouse drag on the range input. Pen via pointer
-  // events as a secondary path for stylus devices that don't fire touch.
+function _sliderValueFromX(slider, clientX) {
+  const rect = slider.getBoundingClientRect();
+  if (rect.width <= 0) return parseFloat(slider.value) || 0;
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const min = parseFloat(slider.min) || 0;
+  const max = parseFloat(slider.max) || 100;
+  const step = parseFloat(slider.step) || 0;
+  let v = min + ratio * (max - min);
+  if (step > 0) v = Math.round(v / step) * step;
+  return Math.max(min, Math.min(max, v));
+}
+function _sliderUpdate(slider, clientX) {
+  const v = _sliderValueFromX(slider, clientX);
+  if (String(v) === slider.value) return;
+  slider.value = v;
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function attachSliderDrag(slider) {
+  if (!slider || slider.dataset.dragWired === '1') return;
+  slider.dataset.dragWired = '1';
+  slider.addEventListener('touchstart', e => {
+    const max = parseFloat(slider.max);
+    if (!(max > 0)) {
+      _debugTouchInfo = `touchstart blocked: max=${slider.max}`;
+      _renderDebug();
+      return;
+    }
+    _activeSliderDrag = slider;
+    _sliderUpdate(slider, e.touches[0].clientX);
+    _debugTouchInfo = `drag ${slider.id} max=${max} v=${slider.value}`;
+    _renderDebug();
+    e.preventDefault();
+  }, { capture: true, passive: false });
+
+  // Pen fallback for stylus devices that don't fire touch events.
   slider.addEventListener('pointerdown', e => {
     if (e.pointerType !== 'pen') return;
-    if (parseFloat(slider.max) <= 0) return;
-    dragging = true;
+    if (!(parseFloat(slider.max) > 0)) return;
+    _activeSliderDrag = slider;
     try { slider.setPointerCapture(e.pointerId); } catch {}
-    update(e.clientX);
+    _sliderUpdate(slider, e.clientX);
     e.preventDefault();
   });
   slider.addEventListener('pointermove', e => {
-    if (!dragging || e.pointerType !== 'pen') return;
-    update(e.clientX);
+    if (_activeSliderDrag !== slider || e.pointerType !== 'pen') return;
+    _sliderUpdate(slider, e.clientX);
     e.preventDefault();
   });
-  const stopPen = e => {
-    if (!dragging) return;
-    dragging = false;
-    try { slider.releasePointerCapture(e.pointerId); } catch {}
-  };
-  slider.addEventListener('pointerup', stopPen);
-  slider.addEventListener('pointercancel', stopPen);
+}
+
+// Document-level delegated handlers — installed once.
+document.addEventListener('touchmove', e => {
+  if (!_activeSliderDrag) return;
+  _sliderUpdate(_activeSliderDrag, e.touches[0].clientX);
+  _debugTouchInfo = `move ${_activeSliderDrag.id} v=${_activeSliderDrag.value}`;
+  _renderDebug();
+  e.preventDefault();
+}, { capture: true, passive: false });
+function _endSliderDrag() {
+  if (_activeSliderDrag) {
+    _debugTouchInfo = `end ${_activeSliderDrag.id} v=${_activeSliderDrag.value}`;
+    _renderDebug();
+  }
+  _activeSliderDrag = null;
+}
+document.addEventListener('touchend',    _endSliderDrag, { capture: true });
+document.addEventListener('touchcancel', _endSliderDrag, { capture: true });
+document.addEventListener('pointerup',   _endSliderDrag, { capture: true });
+document.addEventListener('pointercancel', _endSliderDrag, { capture: true });
+
+// ── DEBUG STRIP ──────────────────────────────────────────
+// Temporary on-page diagnostic so we can see, on a phone, what the editor
+// thinks its state is. Remove once the slider works reliably.
+function _renderDebug() {
+  const el = document.getElementById('debug-strip');
+  if (!el) return;
+  const aVid = document.getElementById('aroll-preview');
+  const scrub = document.getElementById('scrubber');
+  el.textContent = [
+    `aroll.dur=${E.aroll ? (E.aroll.duration ?? 'undef').toString().slice(0,5) : 'null'}`,
+    `aVid.dur=${(aVid?.duration ?? 'NaN').toString().slice(0,5)}`,
+    `aVid.t=${(aVid?.currentTime ?? 0).toFixed(2)}`,
+    `scrub.max=${scrub?.max}`,
+    `scrub.v=${scrub?.value}`,
+    `touch: ${_debugTouchInfo}`,
+  ].join(' · ');
 }
 
 // ── INIT ─────────────────────────────────────────────────
@@ -1996,8 +2059,12 @@ function attachSliderDrag(slider) {
   attachSliderDrag(document.getElementById('scrubber'));
   attachSliderDrag(document.getElementById('cp-in-slider'));
   attachSliderDrag(document.getElementById('cp-out-slider'));
+  _renderDebug();
   await restoreFromIdb();
   updateExportBtn();
+  _renderDebug();
+  // Keep the debug line fresh while paused; cheap because rAF only ticks at 60fps.
+  (function debugTick(){ _renderDebug(); requestAnimationFrame(debugTick); })();
 })();
 
 // Re-attach drag to trim sliders whenever the trim card re-renders.
