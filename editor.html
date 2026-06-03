@@ -1542,6 +1542,30 @@ function renderTrimCard() {
   } else {
     vid.addEventListener('loadeddata', seekToIn, { once: true });
   }
+
+  // Thumbnail-from-trim-preview fallback. probeClip's hidden 1×1 video can
+  // fail to decode on iOS Safari, leaving b.thumb null. When the visible
+  // trim-preview decodes a frame, grab it and stash it back as the thumb.
+  const captureThumbFromPreview = () => {
+    if (b.thumb) return;
+    if (vid.readyState < 2 || !vid.videoWidth) return;
+    const MAX = 160;
+    const scale = Math.min(MAX / vid.videoWidth, MAX / vid.videoHeight);
+    const c = document.createElement('canvas');
+    c.width  = Math.round(vid.videoWidth  * scale);
+    c.height = Math.round(vid.videoHeight * scale);
+    try { c.getContext('2d').drawImage(vid, 0, 0, c.width, c.height); }
+    catch { return; }
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { c.getContext('2d').drawImage(vid, 0, 0, c.width, c.height); } catch { return; }
+      b.thumb = c.toDataURL('image/jpeg', 0.7);
+      renderThumbStrip();
+      autoSave();
+    }));
+  };
+  vid.addEventListener('loadeddata', captureThumbFromPreview, { once: true });
+  vid.addEventListener('seeked',     captureThumbFromPreview, { once: true });
+  if (vid.readyState >= 2) captureThumbFromPreview();
 }
 
 window.trimPrev = function() {
@@ -1982,40 +2006,31 @@ function _sliderUpdate(slider, clientX) {
   slider.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function attachSliderDrag(slider) {
-  if (!slider || slider.dataset.dragWired === '1') return;
-  slider.dataset.dragWired = '1';
-  slider.addEventListener('touchstart', e => {
-    const max = parseFloat(slider.max);
-    if (!(max > 0)) {
-      _debugTouchInfo = `touchstart blocked: max=${slider.max}`;
-      _renderDebug();
-      return;
-    }
-    _activeSliderDrag = slider;
-    _sliderUpdate(slider, e.touches[0].clientX);
-    _debugTouchInfo = `drag ${slider.id} max=${max} v=${slider.value}`;
+// No-op kept so existing callers (init, renderTrimCard wrapper) still work.
+// All slider drag now goes through the document-level delegation below,
+// which handles static AND dynamically-rendered range inputs without
+// per-element wiring.
+function attachSliderDrag(_slider) { /* delegated to document */ }
+
+// Document-level delegation. One listener handles every <input type=range>
+// on the page (scrubber, clip-panel in/out, trim card in/out) and any future
+// ones rendered into the DOM after this script runs.
+document.addEventListener('touchstart', e => {
+  const slider = e.target?.closest?.('input[type="range"]');
+  if (!slider) return;
+  const max = parseFloat(slider.max);
+  if (!(max > 0)) {
+    _debugTouchInfo = `touchstart blocked id=${slider.id} max=${slider.max}`;
     _renderDebug();
-    e.preventDefault();
-  }, { capture: true, passive: false });
+    return;
+  }
+  _activeSliderDrag = slider;
+  _sliderUpdate(slider, e.touches[0].clientX);
+  _debugTouchInfo = `drag ${slider.id} max=${max} v=${slider.value}`;
+  _renderDebug();
+  e.preventDefault();
+}, { capture: true, passive: false });
 
-  // Pen fallback for stylus devices that don't fire touch events.
-  slider.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'pen') return;
-    if (!(parseFloat(slider.max) > 0)) return;
-    _activeSliderDrag = slider;
-    try { slider.setPointerCapture(e.pointerId); } catch {}
-    _sliderUpdate(slider, e.clientX);
-    e.preventDefault();
-  });
-  slider.addEventListener('pointermove', e => {
-    if (_activeSliderDrag !== slider || e.pointerType !== 'pen') return;
-    _sliderUpdate(slider, e.clientX);
-    e.preventDefault();
-  });
-}
-
-// Document-level delegated handlers — installed once.
 document.addEventListener('touchmove', e => {
   if (!_activeSliderDrag) return;
   _sliderUpdate(_activeSliderDrag, e.touches[0].clientX);
@@ -2023,6 +2038,22 @@ document.addEventListener('touchmove', e => {
   _renderDebug();
   e.preventDefault();
 }, { capture: true, passive: false });
+
+// Pen fallback for stylus devices that don't fire touch events.
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'pen') return;
+  const slider = e.target?.closest?.('input[type="range"]');
+  if (!slider || !(parseFloat(slider.max) > 0)) return;
+  _activeSliderDrag = slider;
+  try { slider.setPointerCapture(e.pointerId); } catch {}
+  _sliderUpdate(slider, e.clientX);
+  e.preventDefault();
+}, { capture: true });
+document.addEventListener('pointermove', e => {
+  if (!_activeSliderDrag || e.pointerType !== 'pen') return;
+  _sliderUpdate(_activeSliderDrag, e.clientX);
+  e.preventDefault();
+}, { capture: true });
 function _endSliderDrag() {
   if (_activeSliderDrag) {
     _debugTouchInfo = `end ${_activeSliderDrag.id} v=${_activeSliderDrag.value}`;
@@ -2067,14 +2098,6 @@ function _renderDebug() {
   (function debugTick(){ _renderDebug(); requestAnimationFrame(debugTick); })();
 })();
 
-// Re-attach drag to trim sliders whenever the trim card re-renders.
-// (The trim card uses innerHTML so the slider elements are replaced.)
-const _origRenderTrimCard = renderTrimCard;
-renderTrimCard = function() {
-  _origRenderTrimCard();
-  attachSliderDrag(document.getElementById('trim-in-slider'));
-  attachSliderDrag(document.getElementById('trim-out-slider'));
-};
 </script>
 </body>
 </html>
