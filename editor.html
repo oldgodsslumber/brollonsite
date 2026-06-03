@@ -437,15 +437,20 @@
   ─────────────────────────────────────────────── -->
   <div class="card">
     <div class="card-title">4 · Export</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn btn-sm" id="save-btn" onclick="saveProject()" disabled style="flex:1">💾 Save Project</button>
-      <label class="btn btn-sm" style="flex:1;cursor:pointer;text-align:center">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-sm" id="save-btn" onclick="saveProject()" disabled style="flex:1;min-width:120px">💾 Save Project</button>
+      <label class="btn btn-sm" style="flex:1;min-width:120px;cursor:pointer;text-align:center">
         📂 Load Project
         <input type="file" accept=".json" style="display:none" onchange="loadProject(this.files[0]);this.value=''">
       </label>
+      <button class="btn btn-sm btn-ghost" onclick="clearStoredProject()" style="flex:1;min-width:120px">🗑 Clear All</button>
     </div>
     <div class="info-banner" style="margin-bottom:12px">
-      Export encodes your edit frame-by-frame into an MP4 — takes a minute but produces a clean, playable file. Works on Chrome, Firefox, and Safari.
+      Your project — including uploaded clips — is saved in this browser automatically and will reload next time.
+      <div id="export-caps" style="margin-top:6px;color:var(--muted);font-size:12px"></div>
+    </div>
+    <div id="export-warn" class="warn-banner" style="display:none;margin-bottom:12px">
+      ⚠ Keep this tab in the foreground during export. Switching apps will corrupt the output.
     </div>
     <button class="btn btn-primary btn-full" id="export-btn" onclick="startExport()" disabled>
       ⬇ Export Video
@@ -714,6 +719,188 @@ async function probeClip(url, file) {
   return result;
 }
 
+// ── INDEXEDDB PERSISTENCE ────────────────────────────────
+// Blobs persist across reloads; project JSON references them by blobId.
+// Without this, every reload loses the uploaded clips.
+const DB_NAME = 'film-kit-editor';
+const DB_VERSION = 1;
+const STORE_BLOBS = 'blobs';
+const STORE_PROJECT = 'project';
+
+let _dbPromise = null;
+function openDb() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_BLOBS))   db.createObjectStore(STORE_BLOBS,   { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(STORE_PROJECT)) db.createObjectStore(STORE_PROJECT, { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _dbPromise;
+}
+function idbGet(store, key) {
+  return openDb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => res(req.result || null);
+    req.onerror   = () => rej(req.error);
+  }));
+}
+function idbPut(store, value) {
+  return openDb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(value);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  }));
+}
+function idbDelete(store, key) {
+  return openDb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  }));
+}
+const idbPutBlob    = (id, blob, name) => idbPut(STORE_BLOBS, { id, blob, name, type: blob.type, size: blob.size, addedAt: Date.now() });
+const idbGetBlob    = id                => idbGet(STORE_BLOBS, id);
+const idbDeleteBlob = id                => idbDelete(STORE_BLOBS, id);
+const idbPutProject = json              => idbPut(STORE_PROJECT, { id: 'current', json, updatedAt: Date.now() });
+const idbGetProject = ()                => idbGet(STORE_PROJECT, 'current').then(r => r?.json || null);
+
+async function idbClearAll() {
+  const db = await openDb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction([STORE_BLOBS, STORE_PROJECT], 'readwrite');
+    tx.objectStore(STORE_BLOBS).clear();
+    tx.objectStore(STORE_PROJECT).clear();
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+async function quotaOk(needBytes) {
+  if (!navigator.storage?.estimate) return true;
+  try {
+    const { quota, usage } = await navigator.storage.estimate();
+    if (!quota) return true;
+    return (usage + needBytes) < quota * 0.9;
+  } catch { return true; }
+}
+
+// ── OBJECTURL LIFECYCLE ──────────────────────────────────
+// Track every URL we create so we can revoke on tab close / clip replace.
+const _liveUrls = new Set();
+function makeUrl(blob) { const u = URL.createObjectURL(blob); _liveUrls.add(u); return u; }
+function revokeUrl(u)  { if (u && _liveUrls.has(u)) { URL.revokeObjectURL(u); _liveUrls.delete(u); } }
+window.addEventListener('pagehide', () => {
+  for (const u of _liveUrls) URL.revokeObjectURL(u);
+  _liveUrls.clear();
+});
+
+// ── AUTOSAVE ─────────────────────────────────────────────
+function projectJson() {
+  return JSON.stringify({
+    version: 2,
+    aroll: E.aroll ? {
+      blobId: E.aroll.blobId, name: E.aroll.name, duration: E.aroll.duration,
+      width: E.aroll.width, height: E.aroll.height, fps: E.aroll.fps,
+    } : null,
+    broll: E.broll.map(b => ({
+      blobId: b.blobId, name: b.name, duration: b.duration,
+      inPoint: b.inPoint, outPoint: b.outPoint, nativeFps: b.nativeFps, thumb: b.thumb,
+    })),
+    clips: E.clips.map(c => ({ brollIdx: c.brollIdx, trackStart: c.trackStart, inPoint: c.inPoint, outPoint: c.outPoint })),
+  });
+}
+let _autoSaveTimer = 0;
+function autoSave() {
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => { idbPutProject(projectJson()).catch(e => console.warn('[autoSave]', e)); }, 500);
+}
+
+// ── RESTORE FROM IDB ─────────────────────────────────────
+async function restoreFromIdb() {
+  let proj;
+  try {
+    const json = await idbGetProject();
+    if (!json) return;
+    proj = JSON.parse(json);
+  } catch (e) { console.warn('[restoreFromIdb] parse', e); return; }
+  if (!proj || (proj.version || 1) < 2) return;
+
+  try {
+    // A-roll
+    if (proj.aroll?.blobId) {
+      const rec = await idbGetBlob(proj.aroll.blobId);
+      if (rec?.blob) {
+        const url = makeUrl(rec.blob);
+        E.aroll = {
+          file: null, url, blobId: rec.id,
+          name: proj.aroll.name, duration: proj.aroll.duration,
+          width: proj.aroll.width, height: proj.aroll.height, fps: proj.aroll.fps,
+        };
+        document.getElementById('aroll-zone').classList.add('loaded');
+        document.getElementById('aroll-info').textContent =
+          `✓ ${E.aroll.name} · ${fmtDur(E.aroll.duration)} · ${E.aroll.width}×${E.aroll.height} · ${fmtFps(E.aroll.fps)} fps (restored)`;
+        const vid = document.getElementById('aroll-preview');
+        vid.src = url; vid.load();
+        const previewWrap = document.querySelector('.preview-wrap');
+        if (previewWrap) previewWrap.style.aspectRatio = `${E.aroll.width} / ${E.aroll.height}`;
+      }
+    }
+
+    // B-roll
+    const missing = [];
+    for (const sb of proj.broll || []) {
+      if (!sb.blobId) continue;
+      const rec = await idbGetBlob(sb.blobId);
+      if (!rec?.blob) { missing.push(sb.name); continue; }
+      const url = makeUrl(rec.blob);
+      const speedRatio = E.aroll?.fps && sb.nativeFps ? E.aroll.fps / sb.nativeFps : 1;
+      E.broll.push({
+        file: null, url, blobId: rec.id, name: sb.name, duration: sb.duration,
+        thumb: sb.thumb || null, inPoint: sb.inPoint, outPoint: sb.outPoint,
+        nativeFps: sb.nativeFps, speedRatio,
+      });
+    }
+
+    // Clips — only restore ones whose B-roll survived
+    E.clips = (proj.clips || []).filter(c => c.brollIdx < E.broll.length).map(c => ({
+      brollIdx: c.brollIdx, trackStart: c.trackStart, inPoint: c.inPoint, outPoint: c.outPoint,
+    }));
+
+    if (E.aroll) initTimeline();
+    if (E.broll.length) {
+      document.getElementById('broll-zone').classList.add('loaded');
+      const fpsCounts = {};
+      E.broll.forEach(b => { const k = fmtFps(b.nativeFps || 30); fpsCounts[k] = (fpsCounts[k] || 0) + 1; });
+      document.getElementById('broll-info').textContent =
+        `✓ ${E.broll.length} clips restored (${Object.entries(fpsCounts).map(([k,v]) => `${v}×${k}`).join(', ')})`;
+    }
+    renderThumbStrip();
+    renderTrimCard();
+    renderClips();
+    if (missing.length) {
+      setStatus(`Note: ${missing.length} clip${missing.length>1?'s':''} couldn't be restored (browser cleared them). Re-upload to fix.`);
+    }
+  } catch (e) {
+    console.warn('[restoreFromIdb]', e);
+  }
+}
+
+window.clearStoredProject = async () => {
+  if (!confirm('Clear all uploaded clips and the saved project? This cannot be undone.')) return;
+  for (const u of _liveUrls) URL.revokeObjectURL(u);
+  _liveUrls.clear();
+  await idbClearAll().catch(() => {});
+  location.reload();
+};
+
 // ── UPLOAD ───────────────────────────────────────────────
 const isVideo = f => f && (f.type.startsWith('video/') || /\.(mp4|mov|m4v|mkv|avi|webm|3gp|mts|m2ts)$/i.test(f.name));
 
@@ -722,8 +909,17 @@ window.loadAroll = async file => {
     alert('Please select a video file (MP4, MOV, MKV, etc.).');
     return;
   }
-  if (E.aroll) URL.revokeObjectURL(E.aroll.url);
-  const url = URL.createObjectURL(file);
+  if (!(await quotaOk(file.size))) {
+    alert('Not enough browser storage available to keep this clip across reloads. Use a smaller file or clear the project.');
+    return;
+  }
+  // Replace previous A-roll: revoke URL + drop its persistent blob
+  if (E.aroll) {
+    revokeUrl(E.aroll.url);
+    if (E.aroll.blobId) idbDeleteBlob(E.aroll.blobId).catch(() => {});
+  }
+  const blobId = crypto.randomUUID();
+  const url = makeUrl(file);
 
   const zone = document.getElementById('aroll-zone');
   zone.classList.add('loaded');
@@ -731,7 +927,8 @@ window.loadAroll = async file => {
   infoEl.textContent = `Loading A-roll…`;
 
   const meta = await probeClip(url, file);
-  E.aroll = { file, url, duration: meta.duration, width: meta.width, height: meta.height, name: file.name, fps: meta.fps };
+  E.aroll = { file, url, blobId, duration: meta.duration, width: meta.width, height: meta.height, name: file.name, fps: meta.fps };
+  idbPutBlob(blobId, file, file.name).catch(e => console.warn('[idbPutBlob aroll]', e));
 
   infoEl.textContent = `✓ ${file.name} · ${fmtDur(meta.duration)} · ${meta.width}×${meta.height} · ${fmtFps(meta.fps)} fps`;
 
@@ -750,6 +947,7 @@ window.loadAroll = async file => {
   initTimeline();
   renderClips();
   updateExportBtn();
+  autoSave();
 };
 
 window.loadBroll = async files => {
@@ -759,6 +957,11 @@ window.loadBroll = async files => {
     alert(`Maximum 15 b-roll clips. You already have ${E.broll.length}.`);
     return;
   }
+  const totalSize = list.reduce((s, f) => s + f.size, 0);
+  if (!(await quotaOk(totalSize))) {
+    alert('Not enough browser storage available to keep these clips across reloads. Drop some clips or use smaller files.');
+    return;
+  }
   E.brollLoading = true;
   const infoEl = document.getElementById('broll-info');
 
@@ -766,14 +969,16 @@ window.loadBroll = async files => {
   for (let i = 0; i < list.length; i++) {
     infoEl.textContent = `Loading clip ${i + 1} of ${list.length}…`;
     const file = list[i];
-    const url = URL.createObjectURL(file);
+    const blobId = crypto.randomUUID();
+    const url = makeUrl(file);
     const probe = await probeClip(url, file);
     const speedRatio = E.aroll?.fps ? E.aroll.fps / probe.fps : 1;
     E.broll.push({
-      file, url, duration: probe.duration, name: file.name,
+      file, url, blobId, duration: probe.duration, name: file.name,
       thumb: probe.thumb, inPoint: 0, outPoint: probe.duration,
       nativeFps: probe.fps, speedRatio,
     });
+    idbPutBlob(blobId, file, file.name).catch(e => console.warn('[idbPutBlob broll]', e));
     // Show thumbnail immediately as each clip loads
     renderThumbStrip();
     // Yield so Safari can fully release the media session
@@ -796,6 +1001,7 @@ window.loadBroll = async files => {
   const fpsSummary = Object.entries(fpsCounts).map(([k, v]) => `${v}×${k}`).join(', ');
   infoEl.textContent = `✓ ${E.broll.length} clips loaded (${fpsSummary})`;
   updateExportBtn();
+  autoSave();
 };
 
 // ── THUMBNAIL STRIP ──────────────────────────────────────
@@ -943,7 +1149,10 @@ document.addEventListener('pointermove', e => {
   renderClips();
   if (E.selected === _drag.idx) showClipPanel();
 });
-document.addEventListener('pointerup', () => { _drag = null; _dragActive = false; });
+document.addEventListener('pointerup', () => {
+  if (_drag && _dragActive) autoSave();
+  _drag = null; _dragActive = false;
+});
 
 // ── CLIP PANEL ────────────────────────────────────────────
 function showClipPanel() {
@@ -968,6 +1177,7 @@ window.onClipIn = function(val) {
   document.getElementById('cp-in-slider').value = val;
   document.getElementById('cp-in-val').textContent = val.toFixed(1) + 's';
   renderClips();
+  autoSave();
 };
 window.onClipOut = function(val) {
   if (E.selected === null) return;
@@ -977,6 +1187,7 @@ window.onClipOut = function(val) {
   document.getElementById('cp-out-slider').value = val;
   document.getElementById('cp-out-val').textContent = val.toFixed(1) + 's';
   renderClips();
+  autoSave();
 };
 
 window.deleteClip = () => {
@@ -986,6 +1197,7 @@ window.deleteClip = () => {
   hideClipPanel();
   renderClips();
   updateExportBtn();
+  autoSave();
 };
 
 // ── PLAYBACK ─────────────────────────────────────────────
@@ -1007,8 +1219,7 @@ aVid.addEventListener('ended', () => {
   E.playing = false;
   cancelAnimationFrame(_playLoopId);
   document.getElementById('play-btn').textContent = '▶ Play';
-  bVid.pause();
-  bVid.style.visibility = 'hidden';
+  exitCutaway();
 });
 
 // activeCutawayAt: which placed clip (if any) covers t? Uses chronological sort
@@ -1035,25 +1246,88 @@ function nextCutawayAfter(t) {
   return best;
 }
 
-function syncOverlay(t) {
-  const match = activeCutawayAt(t);
-  if (match) {
+// Identity for a placed cutaway. Different from === because a slider edit
+// may build a new object with the same conceptual position.
+function cutId(c) { return c ? `${c.brollIdx}@${c.trackStart}` : null; }
+
+let _currentCutId = null;
+let _transitionInFlight = false;
+
+// Enter a new cutaway: hide → swap src if needed → seek → await seeked → reveal.
+// Hiding during the swap avoids flashing the tail frame of the previous clip
+// when two cutaways play back-to-back.
+async function enterCutaway(match, t) {
+  if (_transitionInFlight) return;
+  _transitionInFlight = true;
+  const targetId = cutId(match);
+  try {
     const bclip = E.broll[match.brollIdx];
-    const ratio = bclip?.speedRatio || 1;
+    if (!bclip) return;
+    const ratio = bclip.speedRatio || 1;
     const rawTime = match.inPoint + (t - match.trackStart) * ratio;
     const bTime = Math.max(match.inPoint, Math.min(match.outPoint - 0.01, rawTime));
+
+    bVid.style.visibility = 'hidden';
+
     if (bVid.dataset.src !== bclip.url) {
       bVid.dataset.src = bclip.url;
       bVid.src = bclip.url;
       bVid.load();
     }
+    if (bVid.readyState < 1) {
+      await new Promise(r => {
+        bVid.addEventListener('loadedmetadata', r, { once: true });
+        setTimeout(r, 1500); // safety: don't deadlock the playback loop
+      });
+    }
+    bVid.playbackRate = ratio;
+    if (Math.abs(bVid.currentTime - bTime) > 0.05) {
+      bVid.currentTime = bTime;
+      await new Promise(r => {
+        bVid.addEventListener('seeked', r, { once: true });
+        setTimeout(r, 800); // safety: iOS occasionally swallows the seeked event
+      });
+    }
+
+    // Only reveal if the user hasn't scrubbed away or into a different cutaway
+    // during the awaits above.
+    const stillHere = cutId(activeCutawayAt(aVid.currentTime)) === targetId;
+    if (stillHere) {
+      if (E.playing && bVid.paused) await bVid.play().catch(() => {});
+      bVid.style.visibility = 'visible';
+      _currentCutId = targetId;
+    }
+  } finally {
+    _transitionInFlight = false;
+  }
+}
+
+function exitCutaway() {
+  if (!bVid.paused) bVid.pause();
+  bVid.style.visibility = 'hidden';
+  _currentCutId = null;
+}
+
+function syncOverlay(t) {
+  const match = activeCutawayAt(t);
+  const matchId = cutId(match);
+
+  if (matchId !== _currentCutId) {
+    if (match) enterCutaway(match, t); // async, fire-and-forget
+    else       exitCutaway();
+    return;
+  }
+
+  if (match) {
+    // Same cutaway, just keep B-roll roughly synced and keep playing
+    const bclip = E.broll[match.brollIdx];
+    const ratio = bclip?.speedRatio || 1;
+    const rawTime = match.inPoint + (t - match.trackStart) * ratio;
+    const bTime = Math.max(match.inPoint, Math.min(match.outPoint - 0.01, rawTime));
     bVid.playbackRate = ratio;
     if (Math.abs(bVid.currentTime - bTime) > 0.35) bVid.currentTime = bTime;
     if (E.playing && bVid.paused) bVid.play().catch(() => {});
-    bVid.style.visibility = 'visible';
   } else {
-    if (!bVid.paused) bVid.pause();
-    bVid.style.visibility = 'hidden';
     // Preload the next cutaway's B-roll a couple seconds before it hits,
     // so the first frame is decoded by the time we reveal it.
     const upcoming = nextCutawayAfter(t);
@@ -1111,8 +1385,8 @@ window.togglePlay = () => {
     _playLoopId = requestAnimationFrame(playLoop);
     document.getElementById('play-btn').textContent = '⏸ Pause';
   } else {
-    aVid.pause(); bVid.pause();
-    bVid.style.visibility = 'hidden';
+    aVid.pause();
+    exitCutaway();
     cancelAnimationFrame(_playLoopId);
     document.getElementById('play-btn').textContent = '▶ Play';
   }
@@ -1121,6 +1395,9 @@ window.togglePlay = () => {
 window.onScrub = val => {
   const t = parseFloat(val);
   aVid.currentTime = t;
+  // Force a re-evaluation on next syncOverlay so a scrub from inside one
+  // cutaway into another (or out into none) reliably switches.
+  _currentCutId = null;
   syncOverlay(t);
   updatePlayheadPos(t);
 };
@@ -1164,6 +1441,7 @@ window.placeAtIndicator = function() {
   renderClips();
   showClipPanel();
   updateExportBtn();
+  autoSave();
 };
 
 // ── TRIM B-ROLL CARD ─────────────────────────────────────
@@ -1238,6 +1516,7 @@ window.onTrimIn = function(val) {
   const vid = document.getElementById('trim-preview');
   if (vid) vid.currentTime = val;
   _updateTrimSummary();
+  autoSave();
 };
 window.onTrimOut = function(val) {
   const b = E.broll[E.trimClipIdx];
@@ -1248,6 +1527,7 @@ window.onTrimOut = function(val) {
   const vid = document.getElementById('trim-preview');
   if (vid) vid.currentTime = val;
   _updateTrimSummary();
+  autoSave();
 };
 function _updateTrimSummary() {
   const b = E.broll[E.trimClipIdx];
@@ -1275,6 +1555,23 @@ function updateExportBtn() {
 }
 
 function setStatus(msg) { document.getElementById('export-status').textContent = msg; }
+
+// Detect WebCodecs once at startup so the export button can describe what
+// will happen before the user clicks. Skill: rendering.md "Detect once at
+// startup, surface the chosen path in the export dialog."
+function detectExportCapability() {
+  const hasVE = typeof window.VideoEncoder !== 'undefined';
+  const hasAE = typeof window.AudioEncoder !== 'undefined';
+  const el = document.getElementById('export-caps');
+  if (!el) return;
+  if (hasVE && hasAE) {
+    el.innerHTML = '<span style="color:var(--success)">●</span> WebCodecs ready — fast H.264 export available.';
+  } else {
+    el.innerHTML = '<span style="color:var(--danger)">●</span> This browser can\'t export here. Use Chrome 94+, Firefox 130+, or Safari 16.4+ (Safari 18 for audio).';
+    const btn = document.getElementById('export-btn');
+    if (btn) btn.dataset.unsupported = '1';
+  }
+}
 
 function setProgress(pct) {
   const track = document.getElementById('progress-track');
@@ -1331,6 +1628,7 @@ window.loadProject = async file => {
     renderThumbStrip();
     renderTrimCard();
     updateExportBtn();
+    autoSave();
 
     const missing = proj.broll.filter(b => nameToIdx[b.name] === undefined).map(b => b.name);
     alert(missing.length
@@ -1348,6 +1646,22 @@ window.startExport = async () => {
   setProgress(1);
   setStatus('Preparing export…');
   if (E.playing) togglePlay();
+
+  // ── Tab-visibility guard ──────────────────────────────
+  // Backgrounding the tab during export silently corrupts the output on iOS
+  // (rAF stops firing, decoders suspend). We abort cleanly if it happens
+  // and warn the user.
+  let exportCancelled = false;
+  const warnBanner = document.getElementById('export-warn');
+  if (warnBanner) warnBanner.style.display = '';
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') exportCancelled = true;
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  const teardownGuard = () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    if (warnBanner) warnBanner.style.display = 'none';
+  };
 
   const aVid = document.getElementById('aroll-preview');
   // H.264 requires even dimensions — round up
@@ -1510,6 +1824,7 @@ window.startExport = async () => {
 
     for (let i = 0; i < totalFrames; i++) {
       if (videoEncErr) throw videoEncErr;
+      if (exportCancelled) throw new Error('Export cancelled — tab was backgrounded. Keep this tab in the foreground and try again.');
       const t = i / FPS;
 
       // Seek & draw A-roll
@@ -1588,13 +1903,18 @@ window.startExport = async () => {
     alert(`Export failed:\n\n${msg}`);
   } finally {
     bv.remove();
+    teardownGuard();
     btn.disabled = false;
     updateExportBtn();
   }
 };
 
 // ── INIT ─────────────────────────────────────────────────
-updateExportBtn();
+(async () => {
+  detectExportCapability();
+  await restoreFromIdb();
+  updateExportBtn();
+})();
 </script>
 </body>
 </html>
