@@ -1947,28 +1947,47 @@ function attachSliderDrag(slider) {
     slider.value = v;
     slider.dispatchEvent(new Event('input', { bubbles: true }));
   };
+  // Touch events. iOS Safari ignores pointer events on range inputs
+  // (and even when they fire, native range handling beats preventDefault),
+  // so this is the path that actually works on iPhone. passive: false is
+  // required for preventDefault to stop the native slider behavior.
+  slider.addEventListener('touchstart', e => {
+    if (parseFloat(slider.max) <= 0) return;
+    dragging = true;
+    update(e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+  slider.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    update(e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+  const endTouch = () => { dragging = false; };
+  slider.addEventListener('touchend', endTouch);
+  slider.addEventListener('touchcancel', endTouch);
+
+  // Desktop: keep native mouse drag on the range input. Pen via pointer
+  // events as a secondary path for stylus devices that don't fire touch.
   slider.addEventListener('pointerdown', e => {
-    // Native mouse drag on desktop works fine; only intercept touch+pen,
-    // which is where iOS Safari's range-input handling falls down.
-    if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-    if (parseFloat(slider.max) <= 0) return; // nothing to scrub yet
+    if (e.pointerType !== 'pen') return;
+    if (parseFloat(slider.max) <= 0) return;
     dragging = true;
     try { slider.setPointerCapture(e.pointerId); } catch {}
     update(e.clientX);
     e.preventDefault();
   });
   slider.addEventListener('pointermove', e => {
-    if (!dragging) return;
+    if (!dragging || e.pointerType !== 'pen') return;
     update(e.clientX);
     e.preventDefault();
   });
-  const stop = e => {
+  const stopPen = e => {
     if (!dragging) return;
     dragging = false;
     try { slider.releasePointerCapture(e.pointerId); } catch {}
   };
-  slider.addEventListener('pointerup', stop);
-  slider.addEventListener('pointercancel', stop);
+  slider.addEventListener('pointerup', stopPen);
+  slider.addEventListener('pointercancel', stopPen);
 }
 
 // ── INIT ─────────────────────────────────────────────────
